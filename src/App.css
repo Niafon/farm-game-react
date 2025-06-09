@@ -1,0 +1,561 @@
+      /*
+        Core styles for the ASCII farm React UI. Variables are defined
+        here so the game can switch to dark mode dynamically.
+      */
+      :root {
+        --main-bg-color: #f8eaff;
+        --border-color: #ffb7b7;
+        --text-color: #000000;
+        --accent-color: #00ffe7;
+          --soil-color: #8B4513;
+          --fence-color: #A0522D;
+          --well-color: #708090;
+          --cloud-color: #AAAAAA;
+          --grass-color: #4CAF50;
+        --window-bg: var(--main-bg-color);
+        --window-border: #ffb7b7;
+        --window-shadow: 0 4px 24px #ffb7b755, 0 1.5px 0 #ffe1e1;
+      }
+
+      * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+          font-family: 'Orbitron', 'monospace', monospace;
+          text-shadow: none !important;
+      }
+
+      body {
+          background: var(--main-bg-color);
+          color: var(--text-color);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          min-height: 100vh;
+          overflow-x: hidden;
+          overflow-y: scroll;
+          position: relative;
+          font-size: 16px;
+          transition: background-color 1.5s ease, color 1.5s ease;
+      }
+
+      .game-container {
+          width: 100%;
+          max-width: 800px;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          padding: 20px;
+          position: relative;
+      }
+
+      /* Стили для инвентаря */
+      .inventory-toggle {
+          position: fixed;
+          top: 20px;
+          left: 20px;
+          background: var(--window-bg);
+          border: 2px solid var(--border-color);
+          border-radius: 5px;
+          padding: 5px 10px;
+          cursor: pointer;
+          z-index: 100;
+          font-size: 1.5rem;
+          color: var(--text-color);
+      }
+
+      .wallet-connect {
+          position: fixed;
+          top: 20px;
+          right: 100px;
+          background: var(--window-bg);
+          border: 2px solid var(--border-color);
+          border-radius: 5px;
+          padding: 5px 10px;
+          cursor: pointer;
+          z-index: 100;
+          font-size: 1.5rem;
+          color: var(--text-color);
+      }
+      .inventory-panel {
+          position: fixed;
+          left: -250px;
+          top: 0;
+          height: 100vh;
+          width: 250px;
+          background: var(--window-bg);
+          border-right: 2px solid var(--window-border);
+          transition: left 0.3s ease;
+          z-index: 99;
+          padding: 70px 15px 20px;
+          overflow-y: auto;
+      }
+      .inventory-panel.open {
+          left: 0;
+      }
+      .inventory-title {
+          font-size: 1.5rem;
+          text-align: center;
+          margin-bottom: 20px;
+          border-bottom: 2px solid var(--border-color);
+          padding-bottom: 10px;
+          font-family: 'Orbitron', 'monospace', monospace;
+          color: #000000;
+          letter-spacing: 2px;
+          text-shadow: none;
+      }
+      .inventory-items {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+      }
+      .inventory-item {
+          display: flex;
+          justify-content: space-between;
+          padding: 5px;
+          border: 1px solid var(--border-color);
+          border-radius: 5px;
+          color: #000000;
+      }
+
+      /* Основное игровое поле */
+      .farm-area {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          width: 100%;
+          min-height: 600px;
+          padding: 40px 0;
+          overflow: hidden;
+      }
+      .farm-scene {
+          position: relative;
+          width: 100%;
+          max-width: 800px;
+          height: 600px;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+      }
+      /* Изменён стиль – блок грядок теперь фиксирован относительно окна браузера, всегда выше волн */
+      .garden-beds {
+          position: fixed;
+          bottom: calc(90px); /* 120px – высота волн, 20px – дополнительный отступ */
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          flex-direction: column;
+          gap: 1px;
+          z-index: 2;
+      }
+      .garden-bed {
+          width: 150px;
+          padding: 20px;
+          background-color: transparent;
+          position: relative;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          min-height: 60px;
+      }
+      .bed-ascii {
+          color: #8B4513;
+          font-size: 0.7rem;
+          line-height: 1.2;
+          white-space: pre;
+          text-align: center;
+          user-select: none;
+          margin-bottom: 5px;
+      }
+      .plant {
+          position: absolute;
+          top: 43%;
+          font-size: 1.7rem;
+          z-index: 3;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: -10px;
+          user-select: none;
+      }
+      @keyframes waterDrop {
+          0% { transform: translate(-50%, -100%); opacity: 1; }
+          100% { transform: translate(-50%, 0); opacity: 0; }
+      }
+      @keyframes seedPlant {
+          0% { transform: translate(-50%, -100%) rotate(0deg); opacity: 1; }
+          100% { transform: translate(-50%, 0) rotate(360deg); opacity: 0; }
+      }
+      @keyframes harvestCut {
+          0% { transform: rotate(0deg); }
+          30% { transform: rotate(-30deg); }
+          60% { transform: rotate(15deg); }
+          100% { transform: rotate(0deg); }
+      }
+      .water-animation, .seed-animation, .harvest-animation {
+          position: absolute;
+          top: 40%;
+          left: 50%;
+          transform-origin: center;
+          transform: translate(-50%, -50%);
+          z-index: 4;
+      }
+      .seed-animation {
+          animation: seedPlant 1s ease-out forwards;
+      }
+      .water-animation {
+          animation: waterDrop 1s ease-out forwards;
+      }
+      .harvest-animation {
+          animation: harvestCut 1s ease-out forwards;
+      }
+      .action-icon {
+          position: absolute;
+          top: -30px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 2rem;
+          background-color: rgba(255, 255, 255, 0.9);
+          border-radius: 50%;
+          padding: 5px;
+          cursor: pointer;
+          z-index: 5;
+          user-select: none;
+      }
+      .action-icon.selected {
+          outline: 2px solid var(--accent-color);
+      }
+      .timer {
+          position: absolute;
+          bottom: 90px;
+          left: 150%;
+          transform: translateX(-50%);
+          background-color: rgba(255, 255, 255, 0.9);
+          padding: 4px 12px;
+          border-radius: 10px;
+          font-size: 1.2rem;
+          border: 1px solid var(--border-color);
+          z-index: 5;
+          color: #000000;
+      }
+      .clouds {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 40vh;
+          z-index: 0;
+          pointer-events: none;
+          overflow: hidden;
+      }
+      .cloud {
+          position: absolute;
+          white-space: nowrap;
+          opacity: 0.4;
+          will-change: transform;
+      }
+      @keyframes floatRight { from { left: -40%; } to { left: 120%; } }
+      @keyframes floatLeft { from { left: 120%; } to { left: -40%; } }
+      .waves {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          width: 100%;
+          height: 120px;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-end;
+          overflow: hidden;
+          z-index: 0;
+          font-family: monospace;
+          color: #4169E1;
+          background: linear-gradient(180deg, transparent, rgba(65, 105, 225, 0.1));
+          line-height: 1.2;
+          font-size: 16px;
+          transition: background 1.5s ease;
+      }
+      .wave-line {
+          width: 200%;
+          white-space: nowrap;
+          opacity: 0.8;
+          text-shadow: none;
+      }
+      .wave-line:nth-child(odd) { animation: waveRight 40s linear infinite; }
+      .wave-line:nth-child(even) { animation: waveLeft 30s linear infinite; }
+      @keyframes waveRight { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+      @keyframes waveLeft { 0% { transform: translateX(-50%); } 100% { transform: translateX(0); } }
+      .waves.dark-wave {
+          color: #191970;
+          background: linear-gradient(180deg, transparent, rgba(25, 25, 112, 0.3));
+      }
+      @keyframes darkWaveFlash { from { background-position: 0; } to { background-position: -50%; } }
+      .wave-animation { animation: darkWaveFlash 2s ease; }
+      .trees {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 1;
+          overflow: hidden;
+      }
+      .tree {
+          position: fixed;
+          color: #2d5a27;
+          font-size: 1.2rem;
+          line-height: 1;
+          white-space: pre;
+          user-select: none;
+          transform-origin: center bottom;
+      }
+      .tree:nth-child(1) {
+          left: 15vw;
+          top: 45vh;
+          transform: scale(1.8);
+          z-index: 2;
+      }
+      .tree:nth-child(2) {
+          left: 70vw;
+          top: 60vh;
+          transform: scale(1.6);
+          z-index: 3;
+      }
+      .tree:nth-child(3) {
+          left: 80vw;
+          top: 20vh;
+          transform: scale(0.9);
+          z-index: 1;
+      }
+
+      /* Стили для модальных окон (стандартное и кастомное) */
+      .modal {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.5);
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+      }
+      .modal-content {
+          background: var(--window-bg);
+          padding: 20px;
+          border-radius: 18px;
+          text-align: center;
+          max-width: 80%;
+          box-shadow: var(--window-shadow);
+          font-family: 'Orbitron', 'monospace', monospace;
+          letter-spacing: 1.5px;
+          color: #000000;
+          text-shadow: none;
+      }
+      .modal-content::before {
+          content: '';
+          display: block;
+          position: absolute;
+          top: 0; left: 0; right: 0; height: 32px;
+          background: var(--window-bg);
+          border-bottom: 2px solid #2d004d;
+          border-radius: 16px 16px 0 0;
+          z-index: 1;
+      }
+      .modal-content::after {
+          content: '✕';
+          position: absolute;
+          top: 6px; right: 16px;
+          color: #fff;
+          font-size: 1.2rem;
+          cursor: pointer;
+          z-index: 2;
+          text-shadow: 0 0 8px #ff9d9d;
+      }
+      .btn {
+          background: var(--window-bg);
+          color: #000000;
+          border: 2.5px solid #2d004d;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px #ffb7b755;
+          padding: 8px 15px;
+          cursor: pointer;
+          margin-top: 10px;
+          font-family: 'Orbitron', 'monospace', monospace;
+          font-weight: bold;
+          text-transform: uppercase;
+          transition: filter 0.2s;
+      }
+      .btn:hover {
+          filter: brightness(1.2) drop-shadow(0 0 8px #ff9d9d);
+      }
+      
+      /* Стили для магазина */
+      .shop-toggle {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: var(--window-bg);
+          border: 2px solid var(--border-color);
+          border-radius: 5px;
+          padding: 5px 10px;
+          cursor: pointer;
+          z-index: 100;
+          font-size: 1.5rem;
+          color: var(--text-color);
+      }
+      .shop-panel {
+          position: fixed;
+          right: -250px;
+          top: 0;
+          height: 100vh;
+          width: 250px;
+          background: var(--window-bg);
+          border-left: 2px solid var(--window-border);
+          transition: right 0.3s ease;
+          z-index: 99;
+          padding: 70px 15px 20px;
+          overflow-y: auto;
+      }
+      .shop-panel.open {
+          right: 0;
+      }
+      .shop-title {
+          font-size: 1.5rem;
+          text-align: center;
+          margin-bottom: 20px;
+          border-bottom: 2px solid var(--border-color);
+          padding-bottom: 10px;
+          font-family: 'Orbitron', 'monospace', monospace;
+          color: #000000;
+          letter-spacing: 2px;
+          text-shadow: none;
+      }
+      .shop-items {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+      }
+
+      /* Кастомное модальное окно для сообщений */
+      .custom-modal {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(20, 20, 20, 0.8);
+          align-items: center;
+          justify-content: center;
+          z-index: 1100;
+      }
+      .custom-modal-content {
+          background: var(--window-bg);
+          padding: 20px;
+          border-radius: 10px;
+          text-align: center;
+          max-width: 80%;
+          width: 400px;
+          position: relative;
+          border: 2px solid var(--window-border);
+          box-shadow: var(--window-shadow);
+          color: #000000;
+      }
+      .custom-modal-button {
+          margin-top: 10px;
+          background: var(--window-bg);
+          color: #000000;
+          border: 2.5px solid #2d004d;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px #ffb7b755;
+          padding: 8px 15px;
+          cursor: pointer;
+          font-family: 'Orbitron', 'monospace', monospace;
+          font-weight: bold;
+          text-transform: uppercase;
+          transition: filter 0.2s;
+      }
+      .custom-modal-button:hover {
+          filter: brightness(1.2) drop-shadow(0 0 8px #ff9d9d);
+      }
+
+      /* Тёмный режим */
+      .dark-mode {
+          --main-bg-color: #250036;
+          --text-color: #000000;
+          --accent-color: #250036;
+          --border-color: #4B0082;
+          --soil-color: #8B4513;
+          --fence-color: #8B0000;
+          --well-color: #4682B4;
+          --cloud-color: #ffffff;
+          --grass-color: #32CD32;
+          background-color: var(--main-bg-color);
+          color: var(--text-color);
+      }
+      
+      /* Блок для продолжения страницы — оставляем для обеспечения прокрутки */
+      .page-extension {
+          height: 150vh;
+      }
+      
+      @media (max-width: 600px) {
+          .farm-scene {
+              height: 80vh;
+              max-width: 100%;
+              padding: 10px;
+          }
+          /* Для мобильной версии скорректировать фиксированное позиционирование грядок */
+          .garden-beds {
+              bottom: calc(120px + 10px); /* меньше дополнительного отступа */
+          }
+          .garden-bed {
+              width: 150px;        /* уменьшенная ширина */
+              padding: 15px;       /* уменьшенные отступы */
+              min-height: 90px;    /* уменьшенная минимальная высота */
+          }
+          .tree {
+              font-size: 1rem;
+          }
+          .farm-area, .farm-scene {
+              overflow: hidden;
+          }
+      }
+
+      .error-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          background-color: #f8f9fa;
+          color: #dc3545;
+          text-align: center;
+          padding: 2rem;
+      }
+
+      .error-container h2 {
+          margin-bottom: 1rem;
+      }
+
+      .error-container button {
+          padding: 0.5rem 1rem;
+          background-color: #dc3545;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: background-color 0.2s;
+      }
+
+      .error-container button:hover {
+          background-color: #c82333;
+      }

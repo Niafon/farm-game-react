@@ -1,0 +1,97 @@
+    <!--
+      Static markup used by the React app. The FarmGame class
+      manipulates these elements to render gameplay.
+    -->
+    <!-- Инвентарь -->
+    <button class="inventory-toggle" id="inventory-toggle">🎒</button>
+    <div class="inventory-panel" id="inventory-panel">
+        <h2 class="inventory-title">Инвентарь</h2>
+        <div class="inventory-items" id="inventory-list">
+            <!-- Инвентарь будет генерироваться JS -->
+        </div>
+    </div>
+
+    <!-- Кошелек -->
+    <button class="wallet-connect" id="wallet-connect">👛</button>
+
+    <!-- Магазин -->
+    <button class="shop-toggle" id="shop-toggle">🏪</button>
+    <div class="shop-panel" id="shop-panel">
+        <h2 class="shop-title">Магазин</h2>
+        <div class="shop-items">
+            <button id="exchange-wheat" class="btn">Обменять 10 пшеницы на 1 монету</button>
+            <button id="buy-expansion" class="btn">Купить расширение (100 монет)</button>
+        </div>
+    </div>
+    
+    <!-- Кастомное модальное окно для сообщений -->
+    <div class="custom-modal" id="custom-modal">
+      <div class="custom-modal-content" id="custom-modal-content">
+        <p id="custom-modal-message"></p>
+        <button class="custom-modal-button" id="custom-modal-button">OK</button>
+      </div>
+    </div>
+
+    <div class="game-container">
+        <div class="farm-scene">
+            <div class="clouds">
+                <div class="cloud" style="top: 5%; font-size: 10rem; animation: floatRight 85s infinite linear; animation-delay: -20s;">☁️</div>
+                <div class="cloud" style="top: 38%; font-size: 9rem; animation: floatLeft 88s infinite linear; animation-delay: -10s;">☁️</div>
+                <div class="cloud" style="top: 18%; font-size: 13rem; animation: floatLeft 95s infinite linear; animation-delay: 15s;">☁️</div>
+                <div class="cloud" style="top: 28%; font-size: 8rem; animation: floatRight 78s infinite linear; animation-delay: 5s;">☁️</div>
+            </div>
+            
+            <!-- Грядки теперь вне зависимости от прокрутки страницы, всегда выше волн -->
+            <div class="garden-beds" id="garden-beds">
+                <!-- Грядки будут генерироваться JS -->
+            </div>
+        </div>
+    </div>
+    
+    <div class="trees">
+        <div class="tree">   cce*88oo
+  C8O8*8Q8P*Ob o8oo
+dOB*9*O8P*UOpugO9*D
+CO*9O0*89PBCOPL*SOBB*
+ Cgg*bU8*UO*OOd*UOdcb
+   6O*U  /p  gc*U*dpP
+     \\\//  /d*uUP*
+       \\\////
+        |||//
+        |||||
+  .....//||||\....\../\\//.....</div>
+
+        <div class="tree">    cce*88oo
+   C8O8*8Q8P*Ob o8oo
+ dOB*9*O8P*UOpugO9*D
+    6O*U  /p  gc*U*dpP
+      \\\//  /d*uUP*
+        \\\////
+         |||//
+...\|/...|||||....\|//../...</div>
+
+        <div class="tree">     cce*88oo
+    C8O8*8Q8P*Ob o8oo
+  dOB*9*O8P*UOpugO9*D
+ CO*9O0*89PBCOPL*SOBB*
+  Cgg*bU8*UO*OOd*UOdcb
+    6O*U  /p  gc*U*dpP
+         |||||
+   .....//||||\..;'/'//....]/...</div>
+    </div>
+
+    <div class="waves"></div>
+
+    <!-- Блок для обеспечения постоянной прокрутки страницы -->
+    <div class="page-extension"></div>
+    
+    <div class="modal" id="welcome-modal">
+        <div class="modal-content">
+            <h2>Добро пожаловать на ASCII Ферму!</h2>
+            <p>Ухаживайте за своими растениями, собирайте урожай и наслаждайтесь процессом!</p>
+            <p>Этапы выращивания:</p>
+            <p>🟫 → 🌱 → 🌽 → 🌾</p>
+            <p>Каждое действие занимает 8 часов реального времени.</p>
+            <button class="btn" id="start-game">Начать игру</button>
+        </div>
+    </div>
