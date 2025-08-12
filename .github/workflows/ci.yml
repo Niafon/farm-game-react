@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ '**' ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test (Jest)
+        run: npm run test
+      - name: Validate env
+        run: node scripts/validate-env.cjs
+        env:
+          VITE_CONTRACT_ADDRESS: 0x1111111111111111111111111111111111111111
+          VITE_MONAD_RPC_URL: https://testnet-rpc.monad.xyz
+          VITE_MONAD_CHAIN_ID: '10143'
+          VITE_MONAD_CHAIN_NAME: Monad Testnet
+      - name: Build
+        run: npm run build
+
