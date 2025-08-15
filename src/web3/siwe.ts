@@ -1,4 +1,3 @@
-import type { JsonRpcSigner } from 'ethers';
 
 export function generateNonce(length = 16): string {
   const array = new Uint8Array(length);
@@ -32,8 +31,47 @@ Expiration Time: ${expirationTime}`
   );
 }
 
-export async function signSiweMessage(signer: JsonRpcSigner, message: string): Promise<string> {
-  return signer.signMessage(message);
+// Server helpers (optional). If backend endpoints are present, prefer using them.
+export async function fetchServerNonce(): Promise<string | undefined> {
+  try {
+    const resp = await fetch('/siwe/nonce', { method: 'GET', headers: { 'accept': 'application/json' } })
+    if (!resp.ok) return undefined
+    const json = (await resp.json()) as { nonce?: string }
+    return typeof json?.nonce === 'string' && json.nonce.length > 0 ? json.nonce : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export async function verifySiweOnServer(payload: { address: string; message: string; signature: string }): Promise<boolean> {
+  try {
+    const resp = await fetch('/siwe/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'accept': 'application/json' },
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    })
+    return resp.ok
+  } catch {
+    return false
+  }
+}
+
+export async function fetchMe(): Promise<{ ok: boolean; address?: string } | null> {
+  try {
+    const resp = await fetch('/me', { method: 'GET', headers: { 'accept': 'application/json' }, credentials: 'include' })
+    if (!resp.ok) return { ok: false }
+    const json = (await resp.json()) as { ok: boolean; address?: string }
+    return json
+  } catch {
+    return null
+  }
+}
+
+export async function serverLogout(): Promise<void> {
+  try {
+    await fetch('/siwe/logout', { method: 'POST', credentials: 'include' })
+  } catch {}
 }
 
 

@@ -1,0 +1,25 @@
+specVersion: 0.0.7
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: FarmGame
+    network: monad
+    source:
+      address: '${FARMGAME_ADDRESS}'
+      abi: FarmGame
+      startBlock: ${START_BLOCK}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Player
+      abis:
+        - name: FarmGame
+          file: ../artifacts/contracts/FarmGame.sol/FarmGame.json
+      eventHandlers:
+        - event: StateDelta(indexed address)
+          handler: handleStateDelta
+      file: ./src/mapping.ts
+

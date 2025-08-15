@@ -1,0 +1,11 @@
+Risk,Where,Impact,Probability,Remediation,Effort
+WalletConnect missing projectId,wagmi connectors,No mobile wallet connections,Medium,Add env `VITE_WALLETCONNECT_PROJECT_ID` and enable connector,Low
+Mixing ethers + viem,Runtime bloat and double stacks,High,High,Migrate to wagmi/viem-only and remove ethers from runtime,Medium
+No SIWE backend,Auth spoofable client-side,High,Medium,Implement nonce/verify server with HttpOnly cookie,Medium
+Missing simulate step,Failed txs only visible post-send,Medium,Medium,Use simulateContract before writes,Low
+No tx replacement handling,User confusion on speed-up/cancel,Medium,Medium,Handle `replaced` receipts and surface UI status,Medium
+ESM testing fragility,Jest breakage on upgrades,Medium,Medium,Keep transformIgnorePatterns empty and pin major versions,Low
+Env misconfig in prod,Hard failure at runtime,Medium,Medium,Extend env validation and add `.env.example`,Low
+CSP connects restricted,Wallet RPC blocked in preview,Low,Low,Ensure `connect-src` allows needed RPC domains,Low
+
+

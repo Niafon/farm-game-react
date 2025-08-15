@@ -21,17 +21,26 @@ export function friendlyMessageForError(err: NormalizedError): string {
   const code = err.code;
   switch (code) {
     case 4001: // user rejected
-      return 'Request was cancelled by the user';
+      return 'Операция отменена пользователем';
     case -32002: // request already pending
-      return 'A wallet request is already pending. Please open your wallet.';
+      return 'Запрос к кошельку уже ожидает. Откройте кошелёк.';
     case 4100: // unauthorized
-      return 'Operation not authorized in the wallet.';
+      return 'Операция не авторизована в кошельке.';
     case 4900: // disconnected
-      return 'Wallet is disconnected from all networks.';
+      return 'Кошелёк отключён от всех сетей.';
     case 4902: // unrecognized chain
-      return 'Requested network is not available in the wallet.';
+      return 'Запрошенная сеть отсутствует в кошельке.';
+    case -32602: // invalid params
+      return 'Неверные параметры запроса к RPC.';
+    case -32603: // internal error
+      return 'Внутренняя ошибка RPC. Повторите попытку позже.';
     default:
-      return err.message || 'Wallet error occurred';
+      // Normalize common wallet provider wrappers
+      if (typeof err.message === 'string') {
+        if (/Already processing/.test(err.message)) return 'Запрос к кошельку уже ожидает. Откройте кошелёк.';
+        if (/User rejected/i.test(err.message)) return 'Операция отменена пользователем';
+      }
+      return err.message || 'Произошла ошибка кошелька';
   }
 }
 

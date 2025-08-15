@@ -1,6 +1,7 @@
 import InventoryView from './InventoryView'
 import ShopView from './ShopView'
 import WalletPanel from './WalletPanel'
+import WalletIconButton from './WalletIconButton'
 export default function StaticMarkup() {
   return (
     <>
@@ -14,7 +15,7 @@ export default function StaticMarkup() {
       </div>
 
       {/* Wallet */}
-      <button className="wallet-connect" id="wallet-connect" aria-label="Connect wallet">👛</button>
+      <WalletIconButton />
       <WalletPanel />
 
       {/* Shop */}
@@ -34,6 +35,8 @@ export default function StaticMarkup() {
 
       <div className="game-container">
         <div className="farm-scene">
+          {/* Secret sun/moon toggle */}
+          <button className="sky-orb" id="sky-orb" aria-label="Sun">☀️</button>
           <div className="clouds" aria-hidden="true">
             <div className="cloud cloud--1">☁️</div>
             <div className="cloud cloud--2">☁️</div>
@@ -43,40 +46,92 @@ export default function StaticMarkup() {
 
           {/* Beds stay above waves regardless of scroll */}
           <div className="garden-beds" id="garden-beds" />
+          {/* ASCII grass fields (left/right), leaving center clear for beds */}
+          <pre id="ascii-grass-left" aria-hidden="true" style={{ position: 'fixed', bottom: 120, left: 0, width: 'calc(50vw - 180px)', textAlign: 'left', color: 'var(--grass-color)', fontFamily: 'monospace', whiteSpace: 'pre', pointerEvents: 'none', zIndex: 0 }}>{`
+~  ~   ~~   ~  ~~   ~   ~ ~    ~~    ~  ~~   ~
+  ~~  ~   ~~   ~  ~~   ~    ~~   ~  ~~   ~  ~ 
+~   ~~    ~  ~~   ~   ~~  ~   ~~   ~   ~~   ~ 
+  ~   ~  ~~   ~  ~~   ~   ~   ~  ~~   ~  ~~   
+`}</pre>
+          <pre id="ascii-grass-right" aria-hidden="true" style={{ position: 'fixed', bottom: 120, right: 0, width: 'calc(50vw - 180px)', textAlign: 'right', color: 'var(--grass-color)', fontFamily: 'monospace', whiteSpace: 'pre', pointerEvents: 'none', zIndex: 0 }}>{`
+~  ~   ~~   ~  ~~   ~   ~ ~    ~~    ~  ~~   ~
+  ~~  ~   ~~   ~  ~~   ~    ~~   ~  ~~   ~  ~ 
+~   ~~    ~  ~~   ~   ~~  ~   ~~   ~   ~~   ~ 
+  ~   ~  ~~   ~  ~~   ~   ~   ~  ~~   ~  ~~   
+`}</pre>
         </div>
       </div>
 
-      <div className="trees" aria-hidden="true">
-        <div className="tree">   cce*88oo{"\n"}
-  C8O8*8Q8P*Ob o8oo{"\n"}
- dOB*9*O8P*UOpugO9*D{"\n"}
- CO*9O0*89PBCOPL*SOBB*{"\n"}
-  Cgg*bU8*UO*OOd*UOdcb{"\n"}
-    6O*U  /p  gc*U*dpP{"\n"}
-      \\\\//  /d*uUP*{"\n"}
-        \\\\////{"\n"}
-         |||//{"\n"}
-         |||||{"\n"}
-   .....//||||\\....\../\\//.....</div>
+		<div className="trees" aria-hidden="true">
+			<div className="tree">
+				<pre className="canopy breeze-1">{`   cce*88oo
+ C8O8*8Q8P*0b o8oo
+d0B*9*O8P*UOpug09*D
+C0*900*89PBC0PL*S0BB*
+ Cgg*bU8*U0*00d*U0dcb
+   60*U   /p   gc*U*dpP
+     \\//    /d*uUP*
+      \\/////`}</pre>
+				<pre className="trunk">{`       |||||
+       |||||
+  ....//||||\\....\\../\\//.....`}</pre>
+			</div>
 
-        <div className="tree">    cce*88oo{"\n"}
-    C8O8*8Q8P*Ob o8oo{"\n"}
-  dOB*9*O8P*UOpugO9*D{"\n"}
-     6O*U  /p  gc*U*dpP{"\n"}
-       \\\\//  /d*uUP*{"\n"}
-         \\\\////{"\n"}
-          |||//{"\n"}
- ...\|/...|||||....\|//../...</div>
+			<div className="tree">
+				<pre className="canopy breeze-2">{`    cce*88oo
+  C8O8*8Q8P*0b o8oo
+ dOB*9*O8P*UOpug09*D
+  Cgg*bU8*U0*00d*U0dcb
+    6O*U  /p  gc*U*dpP
+      \\//  /d*uUP*
+        \\////`}</pre>
+				<pre className="trunk">{`         |||||
+         |||||
+ ...././||||\\..../\\/....`}</pre>
+			</div>
 
-        <div className="tree">     cce*88oo{"\n"}
-     C8O8*8Q8P*Ob o8oo{"\n"}
-   dOB*9*O8P*UOpugO9*D{"\n"}
-  CO*9O0*89PBCOPL*SOBB*{"\n"}
-   Cgg*bU8*UO*OOd*UOdcb{"\n"}
-     6O*U  /p  gc*U*dpP{"\n"}
-          |||||{"\n"}
-    .....//||||\\..;'/'//....]/...</div>
-      </div>
+			<div className="tree">
+				<pre className="canopy breeze-3">{`     cce*88oo
+   C8O8*8Q8P*0b o8oo
+  dOB*9*O8P*UOpug09*D
+   CO*900*89PBC0PL*S0BB*
+     6O*U  /p  gc*U*dpP
+        \\//  /d*uUP*
+          \\///`}</pre>
+				<pre className="trunk">{`          ||||
+          ||||
+  ...//||||\\..;'/\\/..../`}</pre>
+			</div>
+
+			{/* Extra trees */}
+			<div className="tree">
+				<pre className="canopy breeze-1">{`      *o88oo
+    C8Q8*8P*0b oo
+   d0B*9*08*UOpg09*D
+    Cg*bU8*U0*0d*U0db
+      6O*U /p gc*U*dp
+        \\// /d*uU
+          \\///`}</pre>
+				<pre className="trunk">{`        ||||
+        ||||
+   ...//||||\\..../\\/..`}</pre>
+			</div>
+			<div className="tree">
+				<pre className="canopy breeze-2">{`       cce*8oo
+     C8O8*Q8P*b o8o
+   dOB*9*O8P*UOpug*
+     Cgg*bU8*U0*0db
+       6O*U /p gc*U
+         \\// /d*
+          \\//`}</pre>
+				<pre className="trunk">{`         |||
+         |||
+   ..//||||\\.../\\/..`}</pre>
+			</div>
+		</div>
+
+		{/* Reserve extra space for future expansion elements */}
+		<div id="expansion-reserve" style={{ position: 'fixed', right: '4vw', top: '20vh', width: 200, height: 120, pointerEvents: 'none' }} aria-hidden="true" />
 
       <div className="waves"></div>
 

@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 type GardenBed = {
   isActionInProgress?: boolean
 }
 
-export default function BedTxStatus({ index }: { index: number }) {
+function BedTxStatusBase({ index }: { index: number }) {
   const [inProgress, setInProgress] = useState<boolean>(false)
   const [confirmed, setConfirmed] = useState<boolean>(false)
 
@@ -31,6 +31,9 @@ export default function BedTxStatus({ index }: { index: number }) {
   if (confirmed) return <div className="tx-status" aria-live="polite">✅ Confirmed</div>
   return null
 }
+
+const BedTxStatus = React.memo(BedTxStatusBase)
+export default BedTxStatus
 
 
 

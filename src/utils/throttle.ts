@@ -4,8 +4,9 @@ export function throttle<T extends (...args: unknown[]) => void>(fn: T, wait: nu
   let lastArgs: unknown[] | null = null;
   const invoke = () => {
     lastTime = Date.now();
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    fn.apply(null as unknown as ThisParameterType<T>, lastArgs! as Parameters<T>);
+    if (lastArgs) {
+      fn.apply(null as unknown as ThisParameterType<T>, lastArgs as Parameters<T>);
+    }
     timeout = null;
     lastArgs = null;
   };

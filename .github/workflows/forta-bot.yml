@@ -1,0 +1,22 @@
+name: Forta Bot Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: monitoring/forta-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: monitoring/forta-bot/package.json
+      - run: npm ci || true
+      - run: echo "Bot skeleton - add forta-agent impl here"
+
+

@@ -1,0 +1,14 @@
+{
+  "name": "farmgame-subgraph",
+  "private": true,
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy --studio farmgame"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.70.2",
+    "@graphprotocol/graph-ts": "^0.33.0"
+  }
+}
+

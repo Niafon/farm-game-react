@@ -14,6 +14,14 @@ export function Shop({ onExchange, onBuyExpansion }: ShopProps) {
         <button id="buy-expansion" className="btn" onClick={onBuyExpansion}>
           Buy expansion (100 coins)
         </button>
+        <hr />
+        <button id="buy-seed-tomato" className="btn">Buy Tomato Seeds (10 coins)</button>
+        <button id="buy-seed-cucumber" className="btn">Buy Cucumber Seeds (12 coins)</button>
+        <button id="buy-seed-hops" className="btn">Buy Hops Seeds (25 coins)</button>
+        <button id="buy-brewing-machine" className="btn">Buy Brewing Machine (150 coins)</button>
+        <hr />
+        <button id="sell-tomato" className="btn">Sell Tomatoes (x1 → 3 coins)</button>
+        <button id="sell-cucumber" className="btn">Sell Cucumbers (x1 → 2 coins)</button>
       </div>
     </div>
   );

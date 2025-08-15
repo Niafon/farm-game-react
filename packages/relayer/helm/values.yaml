@@ -1,0 +1,23 @@
+image:
+  repository: your-registry/farmgame-relayer
+  tag: latest
+
+env:
+  - name: PORT
+    value: "8899"
+  - name: REDIS_URL
+    value: "redis://redis:6379"
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+

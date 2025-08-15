@@ -6,6 +6,7 @@ import './App.css'
 import { initializeGame } from './game'
 import StaticMarkup from './components/StaticMarkup'
 import { Web3ErrorBoundary } from './components/Web3ErrorBoundary'
+import { MonitoringDashboard, useMonitoringDashboard } from './components/MonitoringDashboard'
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 function App() {
   const initialized = useRef(false)
   const gameInstance = useRef<ReturnType<typeof initializeGame> | null>(null)
+  const { isVisible, setIsVisible } = useMonitoringDashboard()
 
   useEffect(() => {
     if (!initialized.current) {
@@ -49,6 +51,10 @@ function App() {
     <ErrorBoundary>
       <Web3ErrorBoundary>
         <StaticMarkup />
+        <MonitoringDashboard 
+          isVisible={isVisible} 
+          onToggle={setIsVisible}
+        />
       </Web3ErrorBoundary>
     </ErrorBoundary>
   )

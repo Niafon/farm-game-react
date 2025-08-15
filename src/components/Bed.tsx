@@ -1,7 +1,9 @@
 import BedContent from './BedContent'
 import BedOverlay from './BedOverlay'
 
-export default function Bed({ index }: { index: number }) {
+import React from 'react'
+
+function BedBase({ index }: { index: number }) {
   return (
     <div className="garden-bed" id={`bed-${index}`}>
       <BedContent index={index} />
@@ -11,6 +13,9 @@ export default function Bed({ index }: { index: number }) {
     </div>
   )
 }
+
+const Bed = React.memo(BedBase)
+export default Bed
 
 
 

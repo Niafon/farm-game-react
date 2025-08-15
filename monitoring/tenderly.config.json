@@ -1,0 +1,23 @@
+{
+  "project": "farmgame",
+  "access_key": "${TENDERLY_ACCESS_KEY}",
+  "accounts": [],
+  "contracts": [
+    {
+      "name": "FarmGame",
+      "address": "${CONTRACT_ADDRESS}",
+      "network": "monad"
+    }
+  ],
+  "alerts": {
+    "revertRate": {
+      "thresholdPct": 5,
+      "windowMinutes": 10
+    },
+    "gasAnomaly": {
+      "deltaPct": 50
+    },
+    "adminEvents": ["Paused", "Unpaused"]
+  }
+}
+

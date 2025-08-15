@@ -2,6 +2,114 @@ name: CI
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test -- --watchAll=false
+
+      - name: Build web
+        env:
+          VITE_CONTRACT_ADDRESS: 0x0000000000000000000000000000000000000000
+          VITE_MONAD_RPC_URL: https://testnet-rpc.monad.xyz
+          VITE_MONAD_CHAIN_ID: 10143
+          VITE_MONAD_CHAIN_NAME: Monad Testnet
+        run: npm run build:ci
+
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type Check
+        run: npm run type-check
+      - name: Test (Jest)
+        run: npm run test -- --coverage --watchAll=false
+      - name: Hardhat tests
+        run: npm run hh:test
+        env:
+          VITE_MONAD_RPC_URL: https://testnet-rpc.monad.xyz
+          VITE_MONAD_CHAIN_ID: 10143
+      - name: Build
+        run: npm run build:ci
+        env:
+          VITE_CONTRACT_ADDRESS: 0x0000000000000000000000000000000000000000
+          VITE_MONAD_RPC_URL: https://testnet-rpc.monad.xyz
+          VITE_MONAD_CHAIN_ID: 10143
+          VITE_MONAD_CHAIN_NAME: Monad Testnet
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test -- --ci
+      - name: Build
+        env:
+          VITE_CONTRACT_ADDRESS: 0x0000000000000000000000000000000000000000
+          VITE_MONAD_RPC_URL: https://testnet-rpc.monad.xyz
+          VITE_MONAD_CHAIN_ID: 10143
+          VITE_MONAD_CHAIN_NAME: Monad Testnet
+        run: npm run build:ci
+
+name: CI
+
+on:
+  push:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ '**' ]

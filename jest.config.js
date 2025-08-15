@@ -8,10 +8,16 @@ export default {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
   testMatch: ['<rootDir>/src/__tests__/**/*.ts?(x)'],
-  globals: {
-    'ts-jest': {
-      tsconfig: './tsconfig.test.json'
-    }
-  },
-  transformIgnorePatterns: ['/node_modules/(?!(@sentry)/)']
+  // Transform all modules so ESM packages work under Jest
+  transformIgnorePatterns: [],
+  transform: {
+    '^.+\\.(ts|tsx|js|jsx)$': [
+      'ts-jest',
+      {
+        tsconfig: '<rootDir>/tsconfig.test.json',
+        useESM: true,
+        isolatedModules: true
+      }
+    ]
+  }
 };

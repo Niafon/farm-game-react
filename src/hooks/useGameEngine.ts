@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BedAction, BedStage, type GameState, type GardenBed } from '../types/game';
 import { calculateTimeLeft, formatTime } from '../utils/time';
 import { throttle } from '../utils/throttle';
 import { createRateLimiter } from '../utils/rateLimit';
-import { connectWallet, ensureNetwork, isSafeProvider, loadEthers } from '../services/blockchain';
+import { ensureNetwork, isSafeProvider } from '../services/blockchain';
+import { readFullState } from '../services/contract';
+import { FARM_ABI } from '../services/abi';
+import { CONTRACT_ADDRESS } from '../config';
+import { useTxFlow } from './useTxFlow';
+import { useAccount } from 'wagmi';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { watchContractEvent } from '@wagmi/core';
+import { wagmiConfig } from '../web3/wagmi';
 
 const RATE_LIMIT_DELAY = 500;
 const MAX_ACTIONS_PER_MINUTE = 30;
@@ -47,12 +55,22 @@ function useLocalGameState(): [GameState, React.Dispatch<React.SetStateAction<Ga
 }
 
 export function useGameEngine() {
+  const tx = useTxFlow();
   const [gameState, setGameState] = useLocalGameState();
   const [modal, setModal] = useState<{ open: boolean; message: string } | null>(null);
   const [isDark, setIsDark] = useState(false);
   const allowAction = useMemo(() => createRateLimiter(MAX_ACTIONS_PER_MINUTE, RATE_LIMIT_DELAY), []);
-  const contractRef = useRef<any>(null);
-  const stateDeltaHandlerRef = useRef<((player: string) => Promise<void> | void) | null>(null);
+  const { address } = useAccount();
+  const queryClient = useQueryClient();
+
+  // Lightweight runtime shape guard for chain state
+  function isValidChainState(input: unknown): input is { beds: any[]; inventory?: Record<string, number>; expansionPurchased?: boolean } {
+    if (!input || typeof input !== 'object') return false;
+    const obj = input as Record<string, unknown>;
+    if (!Array.isArray(obj.beds)) return false;
+    if ('inventory' in obj && (typeof obj.inventory !== 'object' || obj.inventory === null)) return false;
+    return true;
+  }
 
   useEffect(() => {
     const onResize = throttle(() => {}, 200);
@@ -61,81 +79,89 @@ export function useGameEngine() {
   }, []);
 
   const connect = useCallback(async () => {
-    const ethProvider = (window as any).ethereum as any;
-    if (!ethProvider) {
-      setModal({ open: true, message: 'Ethereum provider not found' });
-      return;
-    }
-    if (!isSafeProvider(ethProvider)) {
-      setModal({ open: true, message: 'Unsafe provider' });
+    const eth = (window as any).ethereum as any;
+    if (!eth || !isSafeProvider(eth)) {
+      setModal({ open: true, message: 'Wallet provider not found' });
       return;
     }
     try {
-      const ethers = await loadEthers();
-      await ensureNetwork(ethProvider);
-      const { account, contract } = await connectWallet(ethers, ethProvider);
-      contractRef.current = contract;
-      setGameState((s) => ({ ...s, walletAddress: account }));
-      stateDeltaHandlerRef.current = async (player: string) => {
-        if (player.toLowerCase() !== account.toLowerCase()) return;
-        await refreshFromChain();
-      };
-      (contract as any).on('StateDelta', stateDeltaHandlerRef.current);
-      await refreshFromChain();
-      setModal({ open: true, message: 'Wallet connected!' });
-    } catch (e) {
-      setModal({ open: true, message: 'Wallet connection failed' });
+      await ensureNetwork(eth);
+      // Откроем модал RainbowKit из движка
+      try { window.dispatchEvent(new CustomEvent('rk:openConnect')); } catch {}
+    } catch {
+      setModal({ open: true, message: 'Wrong network. Please switch to Monad.' });
     }
-  }, [setGameState]);
+  }, [setModal]);
 
   const refreshFromChain = useCallback(async () => {
-    if (!contractRef.current || !gameState.walletAddress) return;
-    try {
-      let data: string | null = null;
-      try {
-        data = await contractRef.current.getFullState(gameState.walletAddress);
-      } catch {}
-      if (!data) {
-        data = await contractRef.current.getGameState(gameState.walletAddress);
-      }
-      if (data) {
-        const state = JSON.parse(data) as GameState;
-        setGameState((s) => ({
-          beds: state.beds || [],
-          inventory: state.inventory || {},
-          firstTime: false,
-          expansionPurchased: Boolean(state.expansionPurchased),
-          walletAddress: s.walletAddress,
-        }));
-      }
-    } catch {}
-  }, [gameState.walletAddress, setGameState]);
+    const player = (address || gameState.walletAddress) as `0x${string}` | undefined;
+    if (!player) return;
+    await queryClient.invalidateQueries({ queryKey: ['chainState', player] });
+  }, [address, gameState.walletAddress, queryClient]);
+
+  // Centralized on-chain state via TanStack Query
+  const playerAddr = (address || gameState.walletAddress) as `0x${string}` | undefined;
+  const chainStateQuery = useQuery({
+    queryKey: ['chainState', playerAddr],
+    queryFn: async () => {
+      if (!playerAddr) return null as GameState | null;
+      const json = await readFullState(playerAddr);
+      const parsed = JSON.parse(json);
+      if (!isValidChainState(parsed)) return null;
+      const s = parsed as { beds: any[]; inventory?: Record<string, number>; expansionPurchased?: boolean };
+      return {
+        beds: s.beds as unknown as GameState['beds'],
+        inventory: s.inventory || {},
+        firstTime: false,
+        expansionPurchased: Boolean(s.expansionPurchased),
+        walletAddress: playerAddr,
+      } satisfies GameState;
+    },
+    enabled: Boolean(playerAddr),
+    staleTime: 15_000,
+  });
+
+  // Reflect fetched chain state into local fallback state
+  useEffect(() => {
+    if (chainStateQuery.data) setGameState(chainStateQuery.data);
+  }, [chainStateQuery.data, setGameState]);
 
   useEffect(() => {
-    return () => {
-      if (contractRef.current && stateDeltaHandlerRef.current) {
-        try {
-          (contractRef.current as any).off('StateDelta', stateDeltaHandlerRef.current);
-        } catch {}
-      }
-    };
-  }, []);
+    // при смене аккаунта из wagmi обновим адрес в локальном состоянии
+    if (address) setGameState((s) => ({ ...s, walletAddress: address }));
+    }, [address, setGameState]);
 
   const performAction = useCallback(
     async (id: string, bed: GardenBed) => {
       if (!allowAction()) return;
       const index = parseInt(id.split('-')[1]);
       if (Number.isNaN(index)) return;
+      if (index < 0 || index >= gameState.beds.length) return;
       if (!bed.nextAction || bed.timerActive || bed.isActionInProgress) return;
 
-      if (contractRef.current) {
+      if (address) {
         try {
           await ensureNetwork((window as any).ethereum);
-          let tx: any;
-          if (bed.nextAction === BedAction.Plant) tx = await contractRef.current.plant(index);
-          else if (bed.nextAction === BedAction.Water) tx = await contractRef.current.water(index);
-          else if (bed.nextAction === BedAction.Harvest) tx = await contractRef.current.harvest(index);
-          if (tx?.wait) await tx.wait();
+          const addr = CONTRACT_ADDRESS as `0x${string}`;
+          const args = [BigInt(index)] as const;
+          const fn = bed.nextAction === BedAction.Plant ? 'plant' : bed.nextAction === BedAction.Water ? 'water' : 'harvest';
+          await tx.run(
+            {
+              address: addr,
+              abi: FARM_ABI as any,
+              functionName: fn as any,
+              args: args as any,
+              simulate: { address: addr, abi: FARM_ABI as any, functionName: fn as any, args: args as any },
+            },
+            {
+              onStart: () => {
+                try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Отправка транзакции…' } })) } catch {}
+              },
+              onMined: () => {
+                try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Транзакция подтверждена' } })) } catch {}
+              },
+            }
+          );
           await refreshFromChain();
         } catch {
           setModal({ open: true, message: 'Action failed. Please try again.' });
@@ -165,11 +191,11 @@ export function useGameEngine() {
         });
       }
     },
-    [allowAction, refreshFromChain, setGameState]
+    [address, allowAction, refreshFromChain, setGameState, gameState.beds.length, tx]
   );
 
   const exchangeWheat = useCallback(async () => {
-    if (contractRef.current) {
+    if (address) {
       try {
         const wheatCount = gameState.inventory.wheat || 0;
         if (wheatCount < 10) {
@@ -178,8 +204,21 @@ export function useGameEngine() {
         }
         await ensureNetwork((window as any).ethereum);
         const count = Math.floor(wheatCount / 10);
-        const tx = await contractRef.current.exchangeWheat(count * 10);
-        await tx.wait();
+        const addr = CONTRACT_ADDRESS as `0x${string}`;
+        const amount = BigInt(count * 10);
+        await tx.run(
+          {
+            address: addr,
+            abi: FARM_ABI as any,
+            functionName: 'exchangeWheat' as any,
+            args: [amount] as any,
+            simulate: { address: addr, abi: FARM_ABI as any, functionName: 'exchangeWheat' as any, args: [amount] as any },
+          },
+          {
+            onStart: () => { try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Отправка обмена…' } })) } catch {} },
+            onMined: () => { try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Обмен подтвержден' } })) } catch {} },
+          }
+        );
         await refreshFromChain();
         setModal({ open: true, message: `You traded ${count * 10} wheat for ${count} coin(s)!` });
       } catch {
@@ -200,14 +239,26 @@ export function useGameEngine() {
       });
       setModal({ open: true, message: `You traded ${count * 10} wheat for ${count} coin(s)!` });
     }
-  }, [gameState.inventory.wheat, refreshFromChain, setGameState]);
+  }, [address, gameState.inventory.wheat, refreshFromChain, setGameState, tx]);
 
   const buyExpansion = useCallback(async () => {
-    if (contractRef.current) {
+    if (address) {
       try {
         await ensureNetwork((window as any).ethereum);
-        const tx = await contractRef.current.buyExpansion();
-        await tx.wait();
+        const addr = CONTRACT_ADDRESS as `0x${string}`;
+        await tx.run(
+          {
+            address: addr,
+            abi: FARM_ABI as any,
+            functionName: 'buyExpansion' as any,
+            args: [] as any,
+            simulate: { address: addr, abi: FARM_ABI as any, functionName: 'buyExpansion' as any, args: [] as any },
+          },
+          {
+            onStart: () => { try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Покупка расширения…' } })) } catch {} },
+            onMined: () => { try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Расширение куплено' } })) } catch {} },
+          }
+        );
         await refreshFromChain();
         setModal({ open: true, message: 'Expansion purchased! New beds added.' });
       } catch {
@@ -229,10 +280,17 @@ export function useGameEngine() {
       });
       setModal({ open: true, message: 'Expansion purchased! New beds added.' });
     }
-  }, [gameState.inventory.coins, refreshFromChain, setGameState]);
+  }, [address, gameState.inventory.coins, refreshFromChain, setGameState, tx]);
 
   const toggleTheme = useCallback(() => {
     setIsDark((d) => !d);
+    // Single source of truth on body class; avoid side-effects that can block scroll
+    const body = document.body;
+    const willBeDark = !body.classList.contains('dark-mode');
+    body.classList.toggle('dark-mode', willBeDark);
+    const waves = document.querySelector('.waves') as HTMLElement | null;
+    waves?.classList.toggle('dark-wave', willBeDark);
+    // no toast, no extra animations — секретная смена темы
   }, []);
 
   const closeModal = useCallback(() => setModal({ open: false, message: '' }), []);
@@ -246,6 +304,23 @@ export function useGameEngine() {
   const timers = useMemo(() => {
     return gameState.beds.map((b) => (b.timerActive && b.timerEnd ? calculateTimeLeft(b.timerEnd) : 0));
   }, [gameState.beds]);
+
+  // Subscribe to StateDelta events to refresh chain state
+  useEffect(() => {
+    if (!address) return;
+    try {
+      const addr = CONTRACT_ADDRESS as `0x${string}`;
+      const unwatch = watchContractEvent(wagmiConfig, {
+        address: addr,
+        abi: FARM_ABI as any,
+        eventName: 'StateDelta' as any,
+        onLogs: () => { try { void refreshFromChain(); } catch {} },
+      });
+      return () => { try { unwatch?.(); } catch {} };
+    } catch {
+      return;
+    }
+  }, [address, refreshFromChain]);
 
   return {
     gameState,

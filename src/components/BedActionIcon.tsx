@@ -18,7 +18,7 @@ function actionEmoji(action: BedAction | null): string {
   switch (action) {
     case BedActionConst.Plant: return '🌰'
     case BedActionConst.Water: return '💧'
-    case BedActionConst.Harvest: return '🔪'
+    case BedActionConst.Harvest: return '🧺'
     default: return ''
   }
 }
@@ -43,7 +43,10 @@ export default function BedActionIcon({ index }: { index: number }) {
   const onClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     const addr = (window as any).walletBridge?.getState?.()?.address as string | undefined
-    if (!addr) return
+    if (!addr) {
+      try { (window as any).gameBridge?.showToast?.('Connect wallet to use this feature') } catch {}
+      return
+    }
     window.gameBridge?.performAction?.(index)
   }
 
@@ -52,7 +55,10 @@ export default function BedActionIcon({ index }: { index: number }) {
       e.preventDefault()
       e.stopPropagation()
       const addr = (window as any).walletBridge?.getState?.()?.address as string | undefined
-      if (!addr) return
+      if (!addr) {
+        try { (window as any).gameBridge?.showToast?.('Connect wallet to use this feature') } catch {}
+        return
+      }
       window.gameBridge?.performAction?.(index)
     }
   }

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GardenBed } from '../types/game'
 import { BedStage } from '../types/game'
 import { deriveNextAction, plantEmoji, getPlantAriaLabel } from '../utils/bed'
 
-export default function BedContent({ index }: { index: number }) {
+function BedContentBase({ index }: { index: number }) {
   const [bed, setBed] = useState<GardenBed | undefined>(() => (window as any).gameBridge?.getBed?.(index))
 
   useEffect(() => {
@@ -27,10 +27,13 @@ export default function BedContent({ index }: { index: number }) {
   }, [bed, next])
 
   const onActivate = useCallback(() => {
-    if (!isActionAllowed) return
-    // Prevent triggering wallet panel while disconnected
+    // If wallet is not connected, show the same toast as shop
     const addr = (window as any).walletBridge?.getState?.()?.address as string | undefined
-    if (!addr) return
+    if (!addr) {
+      try { (window as any).gameBridge?.showToast?.('Connect wallet to use this feature') } catch {}
+      return
+    }
+    if (!isActionAllowed) return
     ;(window as any).gameBridge?.performAction?.(index)
   }, [index, isActionAllowed])
 
@@ -57,5 +60,8 @@ export default function BedContent({ index }: { index: number }) {
     </>
   )
 }
+
+const BedContent = React.memo(BedContentBase)
+export default BedContent
 
 

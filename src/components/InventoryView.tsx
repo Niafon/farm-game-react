@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 type Inventory = Record<string, number>
 
 // window types are declared globally in src/types/global.d.ts
 
-export default function InventoryView() {
+function InventoryViewBase() {
   const [inventory, setInventory] = useState<Inventory>({})
   const [connected, setConnected] = useState<boolean>(false)
 
@@ -53,12 +53,29 @@ export default function InventoryView() {
   )
 }
 
+const InventoryView = React.memo(InventoryViewBase)
+export default InventoryView
+
 function formatItemName(item: string): string {
   switch (item) {
     case 'wheat':
       return '🌾 Wheat'
     case 'coins':
       return '💰 Coins'
+    case 'seed_tomato':
+      return '🍅 Tomato Seeds'
+    case 'seed_cucumber':
+      return '🥒 Cucumber Seeds'
+    case 'seed_hops':
+      return '🌿 Hops Seeds'
+    case 'tomato':
+      return '🍅 Tomato'
+    case 'cucumber':
+      return '🥒 Cucumber'
+    case 'hops':
+      return '🌿 Hops'
+    case 'beer':
+      return '🍺 Beer'
     default:
       return item
   }

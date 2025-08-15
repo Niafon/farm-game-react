@@ -1,0 +1,9 @@
+type Player @entity {
+  id: ID!
+  address: Bytes!
+  lastUpdateBlock: BigInt!
+  lastUpdateTs: BigInt!
+  stateJson: String!
+}
+
+

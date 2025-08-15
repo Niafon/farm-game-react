@@ -45,6 +45,8 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
         uint128 wheat;
         uint128 coins;
         bool expansionPurchased;
+        bool wellPurchased; // speeds up watering by 50%
+        bool fertilizerPurchased; // doubles harvest yield permanently
         Bed[] beds;
         // legacy custom blob for compatibility
         string legacyBlob;
@@ -55,6 +57,9 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
     // Durations (seconds)
     uint32 private constant SEED_TIMER = 10;
     uint32 private constant WATER_TIMER = 10;
+    // Upgrade costs (coins)
+    uint128 private constant WELL_COST = 50;
+    uint128 private constant FERTILIZER_COST = 200;
 
     // Compact delta event to notify frontends to refresh state via getFullState
     event StateDelta(address indexed player);
@@ -89,7 +94,12 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
         require(b.stage == Stage.Seed && !b.timerActive, "cannot water");
         b.stage = Stage.Growing;
         b.timerActive = true;
-        b.timerEnd = uint64(block.timestamp + WATER_TIMER);
+        uint32 duration = WATER_TIMER;
+        if (p.wellPurchased) {
+            // accelerate watering by 50%
+            duration = WATER_TIMER / 2;
+        }
+        b.timerEnd = uint64(block.timestamp + duration);
         _emitDelta(msg.sender);
     }
 
@@ -101,7 +111,8 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
         require(b.stage == Stage.Ready && !b.timerActive, "cannot harvest");
         b.stage = Stage.Empty;
         // increment wheat balance on-chain, bound to msg.sender
-        unchecked { p.wheat += 1; }
+        uint128 yieldAmount = p.fertilizerPurchased ? 2 : 1;
+        unchecked { p.wheat += yieldAmount; }
         _emitDelta(msg.sender);
     }
 
@@ -123,6 +134,24 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
         for (uint256 i = 0; i < 3; i++) {
             p.beds.push(Bed({ stage: Stage.Empty, timerActive: false, timerEnd: 0 }));
         }
+        _emitDelta(msg.sender);
+    }
+
+    function buyWell() external whenNotPaused nonReentrant {
+        Player storage p = _ensurePlayer(msg.sender);
+        require(!p.wellPurchased, "already bought");
+        require(p.coins >= WELL_COST, "not enough coins");
+        p.coins -= WELL_COST;
+        p.wellPurchased = true;
+        _emitDelta(msg.sender);
+    }
+
+    function buyFertilizer() external whenNotPaused nonReentrant {
+        Player storage p = _ensurePlayer(msg.sender);
+        require(!p.fertilizerPurchased, "already bought");
+        require(p.coins >= FERTILIZER_COST, "not enough coins");
+        p.coins -= FERTILIZER_COST;
+        p.fertilizerPurchased = true;
         _emitDelta(msg.sender);
     }
 
@@ -153,7 +182,9 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
             if (b.stage == Stage.Seed && !b.timerActive) {
                 b.stage = Stage.Growing;
                 b.timerActive = true;
-                b.timerEnd = uint64(block.timestamp + WATER_TIMER);
+                uint32 duration2 = WATER_TIMER;
+                if (p.wellPurchased) { duration2 = WATER_TIMER / 2; }
+                b.timerEnd = uint64(block.timestamp + duration2);
             }
         }
         _emitDelta(msg.sender);
@@ -173,7 +204,8 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
             }
         }
         if (harvested > 0) {
-            unchecked { p.wheat += uint128(harvested); }
+            uint128 mult = p.fertilizerPurchased ? 2 : 1;
+            unchecked { p.wheat += uint128(harvested) * mult; }
         }
         _emitDelta(msg.sender);
     }
@@ -191,13 +223,13 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
         // initialize view if new player (read-only)
         if (p.beds.length == 0) {
             // simulate 3 empty beds
-            return _composeStateJSON(_tmpDefaultBeds(), 0, 0, false);
+            return _composeStateJSON(_tmpDefaultBeds(), 0, 0, false, false, false);
         }
         Bed[] memory bedsCopy = new Bed[](p.beds.length);
         for (uint256 i = 0; i < p.beds.length; i++) {
             bedsCopy[i] = _peekRefreshed(p.beds[i]);
         }
-        return _composeStateJSON(bedsCopy, p.wheat, p.coins, p.expansionPurchased);
+        return _composeStateJSON(bedsCopy, p.wheat, p.coins, p.expansionPurchased, p.wellPurchased, p.fertilizerPurchased);
     }
 
     // ---------------- Internal helpers ----------------
@@ -260,7 +292,9 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
         Bed[] memory beds,
         uint256 wheat,
         uint256 coins,
-        bool expansionPurchased
+        bool expansionPurchased,
+        bool wellPurchased,
+        bool fertilizerPurchased
     ) internal pure returns (string memory) {
         string memory bedsJson = _bedsToJSON(beds);
         return string.concat(
@@ -271,7 +305,9 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
                     '"coins":', _uToStr(coins),
                 '},',
                 '"firstTime":false,',
-                '"expansionPurchased":', (expansionPurchased ? 'true' : 'false'),
+                '"expansionPurchased":', (expansionPurchased ? 'true' : 'false'), ',',
+                '"wellPurchased":', (wellPurchased ? 'true' : 'false'), ',',
+                '"fertilizerPurchased":', (fertilizerPurchased ? 'true' : 'false'),
             '}'
         );
     }

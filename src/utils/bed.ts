@@ -16,7 +16,7 @@ export function plantEmoji(stage: BedStage): string {
   switch (stage) {
     case BedStage.Empty: return '🟫'
     case BedStage.Seed: return '🌱'
-    case BedStage.Growing: return '🌽'
+    case BedStage.Growing: return '🌿'
     case BedStage.Ready: return '🌾'
     default: return '🟫'
   }

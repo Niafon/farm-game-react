@@ -5,25 +5,26 @@
  */
 import { BedAction, BedStage, type GameState, type GardenBed } from './types/game'
 
-import type { BrowserProvider, Contract, Eip1193Provider, Signer } from 'ethers'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import { CONTRACT_ADDRESS } from './config'
+// import { CONTRACT_ADDRESS } from './config'
 // Timer formatting handled by React BedTimer
 import { deriveNextAction } from './utils/bed'
 import { throttle } from './utils/throttle'
 import { createRateLimiter } from './utils/rateLimit'
-import { loadEthers as loadEthersModule, ensureNetwork } from './services/blockchain'
+// removed loadEthers preload; wagmi/viem used across app
+import { readFullState, writeBuyExpansion, writeBuyFertilizer, writeBuyWell, writeExchangeWheat, writeHarvest, writePlant, writeSetGameState, writeWater } from './services/contract'
 import { Coalescer } from './utils/coalesce'
 import { withBackoff } from './utils/backoff'
 
 declare global {
     interface Window {
-        ethereum?: Eip1193Provider
+        // do not type ethereum strictly to avoid conflicts with multiple extensions
+        ethereum?: any
     }
 }
 
-import CONTRACT_ABI from './services/abi'
+// import CONTRACT_ABI from './services/abi'
 import Bed from './components/Bed'
 
 // Security constants
@@ -59,13 +60,15 @@ export function initializeGame(): FarmGame {
  */
 class FarmGame {
     private gameState: GameState;
-    private provider?: BrowserProvider;
-    private signer?: Signer;
-    private contract?: Contract;
+    // provider/signer removed; wagmi/viem is the source of truth
+    private contract?: unknown; // reserved for future reads
     private onStateDeltaHandler?: (player: string) => Promise<void> | void;
     private useOnChainActions = true;
-    private readonly scrollThreshold = 10;
-    private scrollDownCount = 0;
+    // Secret trigger v2: достижение дна страницы (>=95%) с анти-дребезгом
+    // retained for potential future heuristics
+    // private lastScrollTs = 0;
+    private lastToggleTs = 0;
+    private readonly toggleCooldownMs = 2500;
     // Inventory DOM is managed by React
     // Removed: inventory list is managed fully by React
     private gardenBedsContainer: HTMLElement;
@@ -73,6 +76,14 @@ class FarmGame {
     private startGameBtn: HTMLButtonElement;
     private exchangeButton: HTMLButtonElement;
     private expansionButton: HTMLButtonElement;
+    private buyTomatoSeedBtn?: HTMLButtonElement;
+    private buyCucumberSeedBtn?: HTMLButtonElement;
+    private buyHopsSeedBtn?: HTMLButtonElement;
+    private buyBrewMachineBtn?: HTMLButtonElement;
+    private sellTomatoBtn?: HTMLButtonElement;
+    private sellCucumberBtn?: HTMLButtonElement;
+    private buyWellButton?: HTMLButtonElement;
+    private buyFertilizerButton?: HTMLButtonElement;
     private walletButton: HTMLButtonElement;
     private allowAction = createRateLimiter(MAX_ACTIONS_PER_MINUTE, RATE_LIMIT_DELAY);
     private isProcessingAction = false;
@@ -108,7 +119,6 @@ class FarmGame {
         baseDelayMs = 500
     ): Promise<T> {
         let attempt = 0;
-        // eslint-disable-next-line no-constant-condition
         while (true) {
             try {
                 return await operation();
@@ -131,6 +141,14 @@ class FarmGame {
         this.exchangeButton = document.getElementById('exchange-wheat') as HTMLButtonElement;
         this.expansionButton = document.getElementById('buy-expansion') as HTMLButtonElement;
         this.walletButton = document.getElementById('wallet-connect') as HTMLButtonElement;
+        this.buyTomatoSeedBtn = document.getElementById('buy-seed-tomato') as HTMLButtonElement | null as any;
+        this.buyCucumberSeedBtn = document.getElementById('buy-seed-cucumber') as HTMLButtonElement | null as any;
+        this.buyHopsSeedBtn = document.getElementById('buy-seed-hops') as HTMLButtonElement | null as any;
+        this.buyBrewMachineBtn = document.getElementById('buy-brewing-machine') as HTMLButtonElement | null as any;
+        this.sellTomatoBtn = document.getElementById('sell-tomato') as HTMLButtonElement | null as any;
+        this.sellCucumberBtn = document.getElementById('sell-cucumber') as HTMLButtonElement | null as any;
+        this.buyWellButton = document.getElementById('buy-well') as HTMLButtonElement | null as any;
+        this.buyFertilizerButton = document.getElementById('buy-fertilizer') as HTMLButtonElement | null as any;
 
         // Bind methods to preserve context
         this.boundHandleScroll = this.handleScroll.bind(this);
@@ -138,6 +156,8 @@ class FarmGame {
         this.boundExchangeWheat = this.exchangeWheat.bind(this);
         this.boundBuyExpansion = this.buyExpansion.bind(this);
         this.boundConnectWallet = this.connectWallet.bind(this);
+        const boundBuyWell = this.buyWell.bind(this);
+        const boundBuyFertilizer = this.buyFertilizer.bind(this);
 
         this.setupInventoryModule();
         this.setupShopModule();
@@ -157,27 +177,76 @@ class FarmGame {
 
         this.exchangeButton.addEventListener('click', this.boundExchangeWheat);
         this.expansionButton.addEventListener('click', this.boundBuyExpansion);
-        this.walletButton.addEventListener('click', () => {
-            const bridge = (window as unknown as { walletBridge?: any }).walletBridge;
-            const addr = (bridge?.getState?.()?.address as string | undefined) ?? this.gameState.walletAddress;
-            if (!addr && bridge?.connect) {
-                void bridge.connect();
-            }
-            // No menu toggle per requirements
+        this.buyWellButton?.addEventListener('click', boundBuyWell);
+        this.buyFertilizerButton?.addEventListener('click', boundBuyFertilizer);
+        this.buyTomatoSeedBtn?.addEventListener('click', () => this.buySeeds('seed_tomato', 10));
+        this.buyCucumberSeedBtn?.addEventListener('click', () => this.buySeeds('seed_cucumber', 12));
+        this.buyHopsSeedBtn?.addEventListener('click', () => this.buySeeds('seed_hops', 25));
+        this.buyBrewMachineBtn?.addEventListener('click', () => this.buyBrewingMachine());
+        this.sellTomatoBtn?.addEventListener('click', () => this.sellItem('tomato', 3));
+        this.sellCucumberBtn?.addEventListener('click', () => this.sellItem('cucumber', 2));
+        // Remove legacy wallet panel toggle on icon; RainbowKit modal handles connect/disconnect
+        this.walletButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            try {
+                const bridge = (window as unknown as { walletBridge?: any }).walletBridge;
+                const addr = (bridge?.getState?.()?.address as string | undefined) ?? this.gameState.walletAddress;
+                const evt = new CustomEvent(addr ? 'rk:openAccount' : 'rk:openConnectOnly');
+                window.dispatchEvent(evt);
+            } catch {}
         });
-        const disconnectBtn = document.getElementById('wallet-disconnect');
-        disconnectBtn?.addEventListener('click', () => {
-            const bridge = (window as unknown as { walletBridge?: any }).walletBridge;
-            if (bridge?.disconnect) {
-                bridge.disconnect();
-            }
-            // Ensure local cleanup always happens
-            this.disconnectWallet();
+        // Redirect any legacy disconnect button clicks to RainbowKit modal
+        document.addEventListener('click', (ev) => {
+            const target = ev.target as HTMLElement | null;
+            if (!target) return;
+            const btn = target.closest('#wallet-disconnect') as HTMLElement | null;
+            if (!btn) return;
+            ev.preventDefault();
+            try {
+                const evt = new CustomEvent('rk:openConnect');
+                window.dispatchEvent(evt);
+            } catch {}
         });
         window.addEventListener('scroll', this.boundHandleScroll, { passive: true } as AddEventListenerOptions);
+        // dblclick на иконках отключён — переключение темы только через солнце/луну и скролл
+
+        // Секретное солнце/луна: 5 кликов по солнцу — тёмная тема и смена на луну; клик по луне — обратно
+        const orb = document.getElementById('sky-orb') as HTMLButtonElement | null;
+        if (orb) {
+            let clicks = 0;
+            let lastClick = 0;
+            const resetWindowMs = 3000;
+            orb.addEventListener('click', () => {
+                const now = Date.now();
+                if (now - lastClick > resetWindowMs) clicks = 0;
+                lastClick = now;
+                clicks++;
+                const isMoon = orb.textContent?.includes('🌙');
+                if (!isMoon && clicks >= 5) {
+                    // 5 кликов по солнцу → тёмная тема и луна
+                    document.body.classList.add('dark-mode');
+                    const waves = document.querySelector('.waves') as HTMLElement | null;
+                    waves?.classList.add('dark-wave');
+                    orb.textContent = '🌙';
+                    orb.classList.add('is-moon');
+                    this.lastToggleTs = now;
+                    clicks = 0;
+                } else if (isMoon && clicks >= 5) {
+                    // 5 кликов по луне → светлая тема и солнце
+                    document.body.classList.remove('dark-mode');
+                    const waves = document.querySelector('.waves') as HTMLElement | null;
+                    waves?.classList.remove('dark-wave');
+                    orb.textContent = '☀️';
+                    orb.classList.remove('is-moon');
+                    this.lastToggleTs = now;
+                    clicks = 0;
+                }
+            });
+        }
         this.throttledResize = throttle(this.boundGenerateWaves, 200);
         window.addEventListener('resize', this.throttledResize, { passive: true } as AddEventListenerOptions);
         this.generateWaves();
+        this.animateAsciiGrass();
         this.installDisconnectedGuards();
 
         // When any timer reaches 0, refresh state consistently
@@ -218,8 +287,6 @@ class FarmGame {
             if (addr && addr !== this.gameState.walletAddress) {
                 // Attached via provider: reflect address and force on-chain sync
                 this.gameState.walletAddress = addr;
-                this.provider = state?.provider;
-                this.signer = state?.signer;
                 this.contract = state?.contract;
                 void (async () => {
                     await this.loadGameStateOnChain();
@@ -230,12 +297,33 @@ class FarmGame {
                     this.updateInventory();
                     this.attachContractEventListeners();
                 })();
+                this.setupStatePolling();
             }
             if (!addr && this.gameState.walletAddress) {
                 // Disconnected via provider: mirror local disconnect
                 this.disconnectWallet();
+                this.setupStatePolling();
             }
+            // Always try to refresh UI/balance on any wallet update
+            this.updateWalletUi();
+            void this.updateWalletBalanceUi();
             this.updateAvailabilityBasedOnWallet();
+        });
+        // Handle crop selection from UI
+        window.addEventListener('bed:setCrop', (e: Event) => {
+            const ce = e as CustomEvent<{ index: number; crop: 'wheat' | 'tomato' | 'cucumber' | 'hops' }>
+            const { index, crop } = ce.detail || ({} as any)
+            if (typeof index !== 'number') return
+            const bed = this.gameState.beds[index]
+            if (!bed) return
+            bed.crop = crop
+            this.emitBedUpdate(index)
+        })
+        // Surface wallet messages to the player
+        window.addEventListener('wallet:message', (e: Event) => {
+            const ce = e as CustomEvent<{ level?: string; message?: string }>; 
+            const msg = ce.detail?.message || 'Wallet message';
+            this.showToast(msg);
         });
         this.updateWalletUi();
         this.updateAvailabilityBasedOnWallet();
@@ -250,9 +338,9 @@ class FarmGame {
                 this.performAction(id, bed);
             },
             disconnect: () => this.disconnectWallet(),
+            showToast: (message: string) => this.showToast(message),
         };
-        // Preload ethers for faster first connect
-        void loadEthersModule();
+        // Preload not needed: wagmi/viem handle providers
     }
 
     public cleanup(): void {
@@ -264,6 +352,8 @@ class FarmGame {
         }
         this.exchangeButton.removeEventListener('click', this.boundExchangeWheat);
         this.expansionButton.removeEventListener('click', this.boundBuyExpansion);
+        if (this.buyWellButton) this.buyWellButton.removeEventListener('click', this.buyWell as any);
+        if (this.buyFertilizerButton) this.buyFertilizerButton.removeEventListener('click', this.buyFertilizer as any);
         this.walletButton.removeEventListener('click', this.boundConnectWallet);
         document.documentElement.removeAttribute('style');
 
@@ -344,6 +434,13 @@ class FarmGame {
     // getActionEmoji handled by React BedActionIcon
 
     private performAction = async (bedId: string, bedData: GardenBed): Promise<void> => {
+        // Block actions when wallet is not connected, show the same toast as for shop
+        const bridge = (window as unknown as { walletBridge?: any }).walletBridge;
+        const connectedAddr = (bridge?.getState?.()?.address as string | undefined) ?? this.gameState.walletAddress;
+        if (!connectedAddr) {
+            this.showToast('Connect wallet to use this feature');
+            return;
+        }
         if (this.isProcessingAction || !this.checkRateLimit()) {
             return;
         }
@@ -366,14 +463,12 @@ class FarmGame {
                 // Execute on-chain tx and refresh authoritative state
                 const executeAndRefresh = async (): Promise<void> => {
                     if (this.useOnChainActions) {
-                        if (!this.contract) {
+                        if (!this.gameState.walletAddress) {
                             this.showCustomModal('Connect wallet first');
                             return;
                         }
-                        // ensure correct chain
-                        await ensureNetwork(window.ethereum as Eip1193Provider);
                         // Send tx based on action
-                        let tx: unknown;
+                        let confirmed = false;
                         // Derive action at execution time to avoid stale local state
                         const actionToExecute = this.deriveNextAction(this.gameState.beds[index]);
                         if (!actionToExecute) {
@@ -381,18 +476,19 @@ class FarmGame {
                         }
                         switch (actionToExecute) {
                             case BedAction.Plant:
-                                tx = await (this.contract as unknown as { plant: (i: number) => Promise<{ wait: () => Promise<unknown> }> }).plant(index);
+                                await writePlant(index);
+                                confirmed = true;
                                 break;
                             case BedAction.Water:
-                                tx = await (this.contract as unknown as { water: (i: number) => Promise<{ wait: () => Promise<unknown> }> }).water(index);
+                                await writeWater(index);
+                                confirmed = true;
                                 break;
                             case BedAction.Harvest:
-                                tx = await (this.contract as unknown as { harvest: (i: number) => Promise<{ wait: () => Promise<unknown> }> }).harvest(index);
+                                await writeHarvest(index);
+                                confirmed = true;
                                 break;
                         }
-                        if (tx && typeof (tx as { wait?: unknown }).wait === 'function') {
-                            await (tx as { wait: () => Promise<unknown> }).wait();
-                        }
+                        if (!confirmed) return;
                         // Load state from chain after confirmation
                         await this.loadGameStateOnChain();
                         this.saveGameState();
@@ -441,7 +537,7 @@ class FarmGame {
                         try {
                             await (async (): Promise<void> => {
                                 if (this.useOnChainActions) {
-                                    if (!this.contract || !actionPlanned) return;
+                                    if (!actionPlanned) return;
                                     // For harvest, preflight refresh from chain and validate readiness
                                     if (actionPlanned === BedAction.Harvest) {
                                         await this.loadGameStateOnChain();
@@ -451,24 +547,25 @@ class FarmGame {
                                             throw new Error('Not ready to harvest yet');
                                         }
                                     }
-                                    let tx: unknown;
+                                    let confirmed = false;
                                     switch (actionPlanned) {
                                         case BedAction.Plant:
-                                            tx = await (this.contract as unknown as { plant: (i: number) => Promise<{ wait: () => Promise<unknown> }> }).plant(index);
+                                            await writePlant(index);
+                                            confirmed = true;
                                             break;
                                         case BedAction.Water:
-                                            tx = await (this.contract as unknown as { water: (i: number) => Promise<{ wait: () => Promise<unknown> }> }).water(index);
+                                            await writeWater(index);
+                                            confirmed = true;
                                             break;
                                         case BedAction.Harvest:
-                                            // Some wallets require gas limit hints; provide a gentle buffer
-                                            tx = await (this.contract as unknown as { harvest: (i: number, overrides?: unknown) => Promise<{ wait: () => Promise<unknown> }> }).harvest(index, { /* gasLimit hint optional */ });
+                                            await writeHarvest(index);
+                                            confirmed = true;
                                             break;
                                     }
-                                    if (!tx || typeof (tx as { wait?: unknown }).wait !== 'function') return;
                                     // Start pending immediately after signature; timer will start only after tx mined
                                     this.gameState.beds[index].isActionInProgress = true;
                                     this.emitBedUpdate(index);
-                                    await (tx as { wait: () => Promise<unknown> }).wait();
+                                    if (!confirmed) return;
                                     // After wait, refresh and also re-derive actionPlanned for safety
                                     await this.loadGameStateOnChain();
                                     this.saveGameState();
@@ -542,9 +639,9 @@ class FarmGame {
         }
         return {
             beds: [
-                { stage: BedStage.Empty, nextAction: BedAction.Plant, timerActive: false },
-                { stage: BedStage.Empty, nextAction: BedAction.Plant, timerActive: false },
-                { stage: BedStage.Empty, nextAction: BedAction.Plant, timerActive: false }
+                { stage: BedStage.Empty, nextAction: BedAction.Plant, timerActive: false, crop: 'wheat' },
+                { stage: BedStage.Empty, nextAction: BedAction.Plant, timerActive: false, crop: 'wheat' },
+                { stage: BedStage.Empty, nextAction: BedAction.Plant, timerActive: false, crop: 'wheat' }
             ],
             inventory: {},
             firstTime,
@@ -571,15 +668,13 @@ class FarmGame {
             return;
         }
         if (this.useOnChainActions) {
-            if (!this.contract) {
+            if (!this.gameState.walletAddress) {
                 this.showCustomModal('Connect wallet first');
                 return;
             }
             try {
-                await ensureNetwork(window.ethereum as Eip1193Provider);
                 const exchangeCount = Math.floor(wheatCount / 10);
-                const tx = await (this.contract as unknown as { exchangeWheat: (amount: number) => Promise<{ wait: () => Promise<unknown> }> }).exchangeWheat(exchangeCount * 10);
-                await tx.wait();
+                await writeExchangeWheat(exchangeCount * 10);
                 await this.loadGameStateOnChain();
                 this.saveGameState();
                 this.updateInventory();
@@ -607,20 +702,132 @@ class FarmGame {
         }
     };
 
+    private ensureCoins(cost: number): boolean {
+        const coins = this.gameState.inventory.coins || 0
+        if (coins < cost) {
+            this.showCustomModal('Not enough coins')
+            return false
+        }
+        return true
+    }
+
+    private addItem(name: string, amount: number): void {
+        if (!this.gameState.inventory[name]) this.gameState.inventory[name] = 0 as any
+        this.gameState.inventory[name] += amount
+    }
+
+    private subItem(name: string, amount: number): boolean {
+        const cur = this.gameState.inventory[name] || 0
+        if (cur < amount) return false
+        this.gameState.inventory[name] = cur - amount
+        return true
+    }
+
+    private buySeeds = (seed: 'seed_tomato' | 'seed_cucumber' | 'seed_hops', cost: number): void => {
+        if (!this.gameState.walletAddress) { this.showCustomModal('Connect wallet first'); return }
+        if (!this.ensureCoins(cost)) return
+        this.subItem('coins', cost)
+        this.addItem(seed, 1)
+        this.saveGameState()
+        this.updateInventory()
+        this.showCustomModal('Seeds purchased! Choose a bed and set crop, then Plant.')
+    }
+
+    private buyBrewingMachine = (): void => {
+        if (this.gameState.brewingMachinePurchased) { this.showCustomModal('Brewing machine already purchased.'); return }
+        if (!this.gameState.walletAddress) { this.showCustomModal('Connect wallet first'); return }
+        const cost = 150
+        if (!this.ensureCoins(cost)) return
+        this.subItem('coins', cost)
+        this.gameState.brewingMachinePurchased = true
+        this.saveGameState()
+        this.updateInventory()
+        this.spawnBrewingMachine()
+        this.showCustomModal('Brewing machine installed near empty space!')
+    }
+
+    private spawnBrewingMachine(): void {
+        const container = document.querySelector('.farm-scene') as HTMLElement | null
+        if (!container) return
+        if (document.getElementById('brew-machine-container')) return
+        
+        // Create container for machine + button
+        const machineContainer = document.createElement('div')
+        machineContainer.id = 'brew-machine-container'
+        machineContainer.style.position = 'fixed'
+        machineContainer.style.right = '8vw'
+        machineContainer.style.bottom = '110px'
+        machineContainer.style.display = 'flex'
+        machineContainer.style.flexDirection = 'column'
+        machineContainer.style.alignItems = 'center'
+        machineContainer.style.gap = '8px'
+        
+        // ASCII art machine
+        const pre = document.createElement('pre')
+        pre.id = 'brew-machine'
+        pre.style.whiteSpace = 'pre'
+        pre.style.fontFamily = 'monospace'
+        pre.style.color = 'var(--icon-color)'
+        pre.style.margin = '0'
+        pre.textContent = [
+            '   ____  ',
+            '  |====| ',
+            '  | || | ',
+            ' [| || |]',
+            '  | || | ',
+            '  |____| ',
+            '   |  |  ',
+            '  _|__|_ ',
+        ].join('\n')
+        
+        // Brew button
+        const brewBtn = document.createElement('button')
+        brewBtn.id = 'brew-beer-machine'
+        brewBtn.className = 'btn brew-btn'
+        brewBtn.textContent = '🍺 Brew Beer'
+        brewBtn.title = 'Brew Beer (5 hops → 1 beer)'
+        brewBtn.addEventListener('click', () => this.brewBeer())
+        
+        machineContainer.appendChild(pre)
+        machineContainer.appendChild(brewBtn)
+        container.appendChild(machineContainer)
+    }
+
+    private sellItem = (item: 'tomato' | 'cucumber', price: number): void => {
+        if (!this.gameState.walletAddress) { this.showCustomModal('Connect wallet first'); return }
+        const count = this.gameState.inventory[item] || 0
+        if (count <= 0) { this.showCustomModal(`No ${item}s to sell`) ; return }
+        this.subItem(item, 1)
+        this.addItem('coins', price)
+        this.saveGameState()
+        this.updateInventory()
+        this.showCustomModal(`Sold 1 ${item} for ${price} coins`)
+    }
+
+    private brewBeer = (): void => {
+        if (!this.gameState.walletAddress) { this.showCustomModal('Connect wallet first'); return }
+        if (!this.gameState.brewingMachinePurchased) { this.showCustomModal('Buy brewing machine first'); return }
+        const hops = this.gameState.inventory.hops || 0
+        if (hops < 5) { this.showCustomModal('Need 5 hops to brew 1 beer'); return }
+        this.subItem('hops', 5)
+        this.addItem('beer', 1)
+        this.saveGameState()
+        this.updateInventory()
+        this.showCustomModal('Brewed 1 beer 🍺 from 5 hops')
+    }
+
     private buyExpansion = async (): Promise<void> => {
         if (this.gameState.expansionPurchased) {
             this.showCustomModal('Expansion already purchased.');
             return;
         }
         if (this.useOnChainActions) {
-            if (!this.contract) {
+            if (!this.gameState.walletAddress) {
                 this.showCustomModal('Connect wallet first');
                 return;
             }
             try {
-                await ensureNetwork(window.ethereum as Eip1193Provider);
-                const tx = await (this.contract as unknown as { buyExpansion: () => Promise<{ wait: () => Promise<unknown> }> }).buyExpansion();
-                await tx.wait();
+                await writeBuyExpansion();
                 await this.loadGameStateOnChain();
                 this.saveGameState();
                 this.initializeGardenBeds();
@@ -650,6 +857,92 @@ class FarmGame {
             this.showCustomModal('Expansion purchased! New beds added.');
         }
     };
+
+    private buyWell = async (): Promise<void> => {
+        if (this.useOnChainActions) {
+            if (!this.gameState.walletAddress) { this.showCustomModal('Connect wallet first'); return; }
+            try {
+                await writeBuyWell();
+                await this.loadGameStateOnChain();
+                this.saveGameState();
+                this.updateInventory();
+                this.showCustomModal('Well purchased! Watering is now 2x faster.');
+                this.spawnAsciiWell();
+            } catch {
+                this.showCustomModal('Buy well failed');
+            }
+        } else {
+            this.showCustomModal('Well purchase requires wallet connection.');
+        }
+    };
+
+    private buyFertilizer = async (): Promise<void> => {
+        if (this.useOnChainActions) {
+            if (!this.gameState.walletAddress) { this.showCustomModal('Connect wallet first'); return; }
+            try {
+                await writeBuyFertilizer();
+                await this.loadGameStateOnChain();
+                this.saveGameState();
+                this.updateInventory();
+                this.showCustomModal('Fertilizer purchased! Harvest yield doubled.');
+                this.spawnAsciiFertilizer();
+            } catch {
+                this.showCustomModal('Buy fertilizer failed');
+            }
+        } else {
+            this.showCustomModal('Fertilizer purchase requires wallet connection.');
+        }
+    };
+
+    private spawnAsciiWell(): void {
+        const container = document.querySelector('.farm-scene') as HTMLElement | null;
+        if (!container) return;
+        if (document.getElementById('ascii-well')) return;
+        const pre = document.createElement('pre');
+        pre.id = 'ascii-well';
+        pre.style.position = 'fixed';
+        pre.style.left = '8vw';
+        pre.style.bottom = '160px';
+        pre.style.whiteSpace = 'pre';
+        pre.style.fontFamily = 'monospace';
+        pre.style.color = 'var(--well-color)';
+        pre.textContent = [
+            '    _____',
+            '   /_____\\',
+            '   |  _  |',
+            ' __|_|_|_|__',
+            '|  _  _  _  |',
+            '|_| |_| |_|_|',
+            '  (   _   )',
+            '   | | | |',
+            '   |_____|'
+        ].join('\n');
+        container.appendChild(pre);
+    }
+
+    private spawnAsciiFertilizer(): void {
+        const container = document.querySelector('.farm-scene') as HTMLElement | null;
+        if (!container) return;
+        if (document.getElementById('ascii-fertilizer')) return;
+        const pre = document.createElement('pre');
+        pre.id = 'ascii-fertilizer';
+        pre.style.position = 'fixed';
+        pre.style.right = '8vw';
+        pre.style.bottom = '160px';
+        pre.style.whiteSpace = 'pre';
+        pre.style.fontFamily = 'monospace';
+        pre.style.color = 'var(--icon-color)';
+        pre.textContent = [
+            '    _________',
+            '   /  FERT  /|',
+            '  /_______ / |',
+            '  |  ____ |  |',
+            '  | |FERT||  |',
+            '  | |____||  |',
+            '  |_________|/'
+        ].join('\n');
+        container.appendChild(pre);
+    }
 
     private showCustomModal = (message: string, buttonText = 'OK', callback?: () => void): void => {
         const modal = document.getElementById('custom-modal') as HTMLElement | null;
@@ -710,40 +1003,11 @@ class FarmGame {
     };
 
     private connectWallet = async (): Promise<void> => {
-        // Prefer WalletProvider bridge if available
-        const bridge = (window as unknown as { walletBridge?: any }).walletBridge;
-        if (bridge?.connect) {
-            await bridge.connect();
-            return;
-        }
-        // Fallback legacy flow (will be removed once all UI is wired to provider)
-        if (!window.ethereum) {
-            this.showCustomModal('Ethereum provider not found');
-            return;
-        }
+        // Open RainbowKit modal instead of legacy flow
         try {
-            await ensureNetwork(window.ethereum as Eip1193Provider);
-            const [account] = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            const ethersMod = await loadEthersModule();
-            this.provider = new ethersMod.BrowserProvider(window.ethereum);
-            this.signer = await this.provider.getSigner();
-            if (!CONTRACT_ADDRESS || /^0x0{40}$/i.test(CONTRACT_ADDRESS)) {
-                this.showCustomModal('Contract address is not configured. Set VITE_CONTRACT_ADDRESS in .env');
-                return;
-            }
-            this.contract = new ethersMod.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, this.signer);
-            this.gameState.walletAddress = account;
-            this.attachContractEventListeners();
-            await this.loadGameStateOnChain();
-            this.showCustomModal('Wallet connected!');
-            this.saveGameState();
-            await this.updateWalletBalanceUi();
-            this.updateWalletUi();
-            this.initializeGardenBeds();
-            this.updateInventory();
-        } catch (err) {
-            console.warn('Wallet connection failed', err);
-        }
+            const evt = new CustomEvent('wallet:openConnect');
+            window.dispatchEvent(evt);
+        } catch {}
     };
 
     // SIWE helpers moved to WalletProvider; legacy methods removed
@@ -769,16 +1033,13 @@ class FarmGame {
     // getEthers replaced by services/blockchain.loadEthers
 
     private loadGameStateOnChain = async (): Promise<void> => {
-        if (!this.contract || !this.gameState.walletAddress) return;
+        if (!this.gameState.walletAddress) return;
         try {
             const data = await this.stateCoalescer.run('fullState', async () => {
                 // Prefer new getFullState, fallback к legacy
                 return await withBackoff(async () => {
-                    try {
-                        return await (this.contract as unknown as { getFullState: (p: string) => Promise<string> }).getFullState(this.gameState.walletAddress as string);
-                    } catch {
-                        return await (this.contract as unknown as { getGameState: (p: string) => Promise<string> }).getGameState(this.gameState.walletAddress as string);
-                    }
+                    const player = this.gameState.walletAddress as `0x${string}`
+                    return await readFullState(player)
                 }, { retries: 3, baseMs: 400 });
             });
             if (data) {
@@ -813,23 +1074,26 @@ class FarmGame {
         const bridge = (window as unknown as { walletBridge?: any }).walletBridge;
         const isConnected = Boolean(bridge?.getState?.()?.address || this.gameState.walletAddress);
         if (!isConnected) return;
-        // Poll every 15s as a fallback when events miss
+        // Poll every 15-30s with jitter as a fallback when events miss
+        const base = 15000;
+        const jitter = Math.floor(Math.random() * 15000);
+        const interval = base + jitter;
         this.pollIntervalId = window.setInterval(() => {
             void this.loadGameStateOnChain().then(() => {
                 this.saveGameState();
                 this.gameState.beds.forEach((_, i) => this.emitBedUpdate(i));
                 this.updateInventory();
             }).catch(() => {});
-        }, 15000);
+        }, interval);
     }
 
     private maybeSaveGameStateOnChain = async (): Promise<void> => {
-        if (!this.contract) return; // requires wallet
+        if (!this.gameState.walletAddress) return; // requires wallet
         const now = Date.now();
         if (now - this.lastChainSaveMs < this.chainSaveCooldownMs) return; // throttle txs
         try {
             const payload = JSON.stringify(this.gameState);
-            await this.retryOperation(() => this.contract!.setGameState(payload));
+            await this.retryOperation(() => writeSetGameState(payload));
             this.lastChainSaveMs = now;
         } catch (err) {
             console.warn('Failed to save state on chain', err);
@@ -984,8 +1248,6 @@ class FarmGame {
             }
         } finally {
             this.contract = undefined;
-            this.provider = undefined;
-            this.signer = undefined;
             this.gameState.walletAddress = undefined;
             // On disconnect, forget all on-chain derived data locally
             this.gameState.beds = [
@@ -1005,20 +1267,14 @@ class FarmGame {
     }
 
     private handleScroll = (): void => {
-        if (window.scrollY > 60) {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            this.scrollDownCount++;
-            if (this.scrollDownCount >= this.scrollThreshold) {
-                this.toggleTheme();
-                const pageExt = document.querySelector('.page-extension') as HTMLElement | null;
-                if (pageExt) pageExt.style.display = 'none';
-                const wavesElem = document.querySelector('.waves') as HTMLElement | null;
-                wavesElem?.classList.add('wave-animation');
-                setTimeout(() => {
-                    wavesElem?.classList.remove('wave-animation');
-                }, 2000);
-                this.scrollDownCount = 0;
-            }
+        const now = Date.now();
+        const doc = document.documentElement;
+        const max = Math.max(1, doc.scrollHeight - doc.clientHeight);
+        const progress = (window.scrollY || doc.scrollTop) / max;
+        // секрет: прокрутка к низу страницы >=95%, с анти-дребезгом
+        if (progress >= 0.95 && now - this.lastToggleTs >= this.toggleCooldownMs) {
+            this.toggleTheme();
+            this.lastToggleTs = now;
         }
     };
 
@@ -1041,6 +1297,41 @@ class FarmGame {
             waveLine.textContent = wavePatterns[i].repeat(repeat * 2);
             waves.appendChild(waveLine);
         }
+    };
+
+    private animateAsciiGrass = (): void => {
+        const left = document.getElementById('ascii-grass-left');
+        const right = document.getElementById('ascii-grass-right');
+        if (!left || !right) return;
+        let t = 0;
+        const baseL = left.textContent || '';
+        const baseR = right.textContent || '';
+        const linesL = baseL.split('\n').filter(Boolean);
+        const linesR = baseR.split('\n').filter(Boolean);
+        const loop = () => {
+            t += 1;
+            const phase = Math.sin(t / 10);
+            // Left waves move to the right
+            const shiftedL = linesL
+                .map((ln, i) => {
+                    const offset = Math.round(Math.sin(phase + i * 0.6) * 3);
+                    const tile = (ln.trim() + ' ').repeat(2).trim();
+                    return `${' '.repeat(Math.max(0, 2 + offset))}${tile}`;
+                })
+                .join('\n');
+            // Right waves move to the left (mirror)
+            const shiftedR = linesR
+                .map((ln, i) => {
+                    const offset = Math.round(Math.sin(phase + i * 0.6 + Math.PI) * 3);
+                    const tile = (ln.trim() + ' ').repeat(2).trim();
+                    return `${tile}${' '.repeat(Math.max(0, 2 + offset))}`;
+                })
+                .join('\n');
+            left.textContent = shiftedL;
+            right.textContent = shiftedR;
+            setTimeout(() => requestAnimationFrame(loop), 120);
+        };
+        requestAnimationFrame(loop);
     };
 
     // throttle moved to ./utils/throttle

@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import type { GardenBed } from '../types/game'
 import { calculateTimeLeft, formatTime } from '../utils/time'
 
-export default function BedTimer({ index }: { index: number }) {
+function BedTimerBase({ index }: { index: number }) {
   const [endTime, setEndTime] = useState<number | undefined>(undefined)
   const [ended, setEnded] = useState<boolean>(false)
 
@@ -35,7 +35,9 @@ export default function BedTimer({ index }: { index: number }) {
 
   const label = useMemo(() => {
     if (!endTime) return ''
+    // Force recalculation when now changes to update timer display
     return formatTime(calculateTimeLeft(endTime))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endTime, now])
 
   useEffect(() => {
@@ -54,5 +56,8 @@ export default function BedTimer({ index }: { index: number }) {
     </div>
   )
 }
+
+const BedTimer = React.memo(BedTimerBase)
+export default BedTimer
 
 

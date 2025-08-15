@@ -2,7 +2,6 @@ export async function withBackoff<T>(fn: () => Promise<T>, opts?: { retries?: nu
   const retries = opts?.retries ?? 3;
   const baseMs = opts?.baseMs ?? 500;
   let attempt = 0;
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       return await fn();
