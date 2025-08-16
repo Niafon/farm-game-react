@@ -1,12 +1,18 @@
 import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
-import { visualizer } from 'rollup-plugin-visualizer'
+// Visualizer loaded lazily only in analyze mode to avoid hard dependency in dev
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const plugins: PluginOption[] = [react()];
   if (mode === 'analyze') {
-    plugins.push(visualizer({ filename: 'bundle-stats.html', gzipSize: true, brotliSize: true }) as PluginOption);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { visualizer } = require('rollup-plugin-visualizer') as { visualizer: (opts?: any) => PluginOption }
+      plugins.push(visualizer({ filename: 'bundle-stats.html', gzipSize: true, brotliSize: true }) as PluginOption)
+    } catch {
+      // optional dependency missing – skip analyzer
+    }
   }
   return {
     plugins,

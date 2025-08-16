@@ -1,0 +1,8 @@
+[33mc68006ffa[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{2025-08-16 13:18:50 +0300}: reset: moving to HEAD~2
+[33m5e29eefe1[m HEAD@{2025-08-16 13:18:40 +0300}: checkout: moving from fia-cool-main to main
+[33m6a11b6210[m[33m ([m[1;31mfia-cool/main[m[33m, [m[1;31mfia-cool/HEAD[m[33m, [m[1;32mfia-cool-main[m[33m)[m HEAD@{2025-08-16 13:09:43 +0300}: reset: moving to HEAD
+[33m6a11b6210[m[33m ([m[1;31mfia-cool/main[m[33m, [m[1;31mfia-cool/HEAD[m[33m, [m[1;32mfia-cool-main[m[33m)[m HEAD@{2025-08-16 12:57:17 +0300}: commit: Добавлена полная игра Farm Game с новыми функциями
+[33m075e0bd04[m HEAD@{2025-08-16 10:22:04 +0300}: checkout: moving from main to fia-cool-main
+[33m5e29eefe1[m HEAD@{2025-08-15 19:33:48 +0300}: commit: feat: Add new game features - tomato, cucumber, hops seeds, brewing machine, and iOS-style crop picker
+[33m52f8ddd62[m HEAD@{2025-08-12 21:57:25 +0300}: commit: P4: Wallet UX (connect concurrency, error normalization), SIWE TTL, CSP headers, optional Sentry, docs
+[33mc68006ffa[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{2025-06-09 10:43:11 +0300}: commit (initial): Initial commit
