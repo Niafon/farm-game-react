@@ -35,6 +35,17 @@ app.post('/siwe/verify', async (req, res) => {
 ```
 
 Content Security Policy shipped in `public/_headers` forbids inline/eval. Avoid storing secrets in localStorage; the app stores only minimal UX flags when disconnected.
+
+## Безопасность пользователей
+
+- Проверяйте адреса сайтов и источники ссылок перед вводом личных данных.
+- Никогда не сообщайте seed-фразы или приватные ключи, даже если сообщение выглядит официальным.
+- Используйте двухфакторную аутентификацию и обновляйте ПО кошелька.
+- Официальные каналы для новостей и поддержки:
+  - Веб-сайт: [https://farmgame.example](https://farmgame.example)
+  - Discord: [https://discord.gg/farmgame](https://discord.gg/farmgame)
+  - Twitter: [https://twitter.com/farmgame](https://twitter.com/farmgame)
+
 # FarmGame React + Solidity
 
 ## Setup
