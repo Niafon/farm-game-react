@@ -19,7 +19,7 @@ const CHAIN_ID = RAW_CHAIN_ID.toString().startsWith('0x')
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: '0.8.20',
+  solidity: '0.8.23',
   gasReporter: process.env.REPORT_GAS ? {
     enabled: true,
     currency: 'USD',
@@ -27,6 +27,7 @@ module.exports = {
     excludeContracts: [],
     showTimeSpent: true,
     noColors: true,
+    outputFile: 'gas-report.txt',
   } : undefined,
   etherscan: process.env.BLOCK_EXPLORER_API_URL ? {
     apiKey: {
