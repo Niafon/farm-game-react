@@ -1,6 +1,34 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+abstract contract Initializable {
+    bool private _initialized;
+    modifier initializer() {
+        require(!_initialized, "initialized");
+        _;
+        _initialized = true;
+    }
+}
+
+abstract contract OwnableLike is Initializable {
+    address private _owner;
+    modifier onlyOwner() { require(msg.sender == _owner, "not owner"); _; }
+    function _initOwner(address owner_) internal initializer { _owner = owner_; }
+}
+
+abstract contract UUPSLike {
+    // keccak-256("eip1967.proxy.implementation") - 1
+    bytes32 private constant _IMPL_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    function upgradeTo(address newImplementation) external {
+        _authorizeUpgrade(newImplementation);
+        assembly { sstore(_IMPL_SLOT, newImplementation) }
+    }
+    function proxiableUUID() external pure returns (bytes32) {
+        return _IMPL_SLOT;
+    }
+    function _authorizeUpgrade(address newImplementation) internal virtual;
+}
+
 abstract contract PausableLike {
     event Paused(address account);
     event Unpaused(address account);
@@ -31,7 +59,7 @@ abstract contract ReentrancyGuardLike {
  * Stores player beds, resources and expansion on-chain.
  * Exposes granular actions and a JSON state fetcher used by the frontend.
  */
-contract FarmGame is PausableLike, ReentrancyGuardLike {
+contract FarmGame is OwnableLike, UUPSLike, PausableLike, ReentrancyGuardLike {
     enum Stage { Empty, Seed, Growing, Ready }
 
     struct Bed {
@@ -211,11 +239,12 @@ contract FarmGame is PausableLike, ReentrancyGuardLike {
     }
 
     // -------- Admin controls --------
-    address private immutable _deployer;
-    modifier onlyOwner() { require(msg.sender == _deployer, "not owner"); _; }
-    constructor(){ _deployer = msg.sender; }
+    function initialize() external initializer {
+        _initOwner(msg.sender);
+    }
     function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 
     // ---------------- State view ----------------
     function getFullState(address player) external view returns (string memory) {

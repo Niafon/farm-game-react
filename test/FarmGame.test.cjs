@@ -6,9 +6,14 @@ describe('FarmGame', function () {
 
   beforeEach(async () => {
     [owner, alice] = await ethers.getSigners();
-    const Factory = await ethers.getContractFactory('FarmGame');
-    farm = await Factory.deploy();
-    await farm.waitForDeployment();
+    const ImplFactory = await ethers.getContractFactory('FarmGame');
+    const impl = await ImplFactory.deploy();
+    await impl.waitForDeployment();
+    const initData = ImplFactory.interface.encodeFunctionData('initialize');
+    const ProxyFactory = await ethers.getContractFactory('ERC1967Proxy');
+    const proxy = await ProxyFactory.deploy(await impl.getAddress(), initData);
+    await proxy.waitForDeployment();
+    farm = await ethers.getContractAt('FarmGame', await proxy.getAddress());
   });
 
   it('initializes with 3 empty beds (view)', async () => {

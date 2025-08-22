@@ -181,7 +181,19 @@ app.post('/siwe/verify', async (req, res) => {
 Add GitHub Actions workflow to run lint → test → build; preview deploy step optional.
 
 ## Contracts
-- Introduced simple `Pausable` and `ReentrancyGuard`-like modifiers.
-- All mutating functions gated by `whenNotPaused` and `nonReentrant`.
+- `FarmGame` is deployed behind a UUPS proxy (ERC1967).
+- OpenZeppelin `Pausable` and `ReentrancyGuard` protect state mutations.
+- All mutating functions are gated by `whenNotPaused` and `nonReentrant`.
+
+## Governance
+- Upgrade admin / owner: `0x0000000000000000000000000000000000000000` (replace with actual owner)
+- Pause admin: `0x0000000000000000000000000000000000000000` (same as owner)
+
+**Upgrade procedure**
+1. Deploy new implementation contract (e.g. `FarmGameV2`).
+2. Run `node scripts/upgrade.cjs` with `PROXY_ADDRESS` pointing to the proxy.
+
+**Pause / unpause**
+- The owner may call `pause()` to halt gameplay and `unpause()` to resume.
 
 
