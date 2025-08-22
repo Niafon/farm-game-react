@@ -23,7 +23,8 @@
     "hh:deploy": "hardhat run --network monad scripts/deploy.cjs",
     "hh:verify": "hardhat verify --network monad",
     "hh:verify:addr": "hardhat verify --network monad %1",
-    "hh:test": "hardhat test"
+    "hh:test": "hardhat test",
+    "test:load": "playwright test tests/load"
   },
   "dependencies": {
     "@rainbow-me/rainbowkit": "^2.2.8",
