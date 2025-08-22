@@ -4,10 +4,9 @@ import { calculateTimeLeft, formatTime } from '../utils/time';
 import { throttle } from '../utils/throttle';
 import { createRateLimiter } from '../utils/rateLimit';
 import { ensureNetwork, isSafeProvider } from '../services/blockchain';
-import { readFullState } from '../services/contract';
+import { readFullState, useFarmContract } from '../services/contract';
 import { FARM_ABI } from '../services/abi';
 import { CONTRACT_ADDRESS } from '../config';
-import { useTxFlow } from './useTxFlow';
 import { useAccount } from 'wagmi';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { watchContractEvent } from '@wagmi/core';
@@ -55,7 +54,7 @@ function useLocalGameState(): [GameState, React.Dispatch<React.SetStateAction<Ga
 }
 
 export function useGameEngine() {
-  const tx = useTxFlow();
+  const { writePlant, writeWater, writeHarvest, writeExchangeWheat, writeBuyExpansion } = useFarmContract();
   const [gameState, setGameState] = useLocalGameState();
   const [modal, setModal] = useState<{ open: boolean; message: string } | null>(null);
   const [isDark, setIsDark] = useState(false);
@@ -142,29 +141,38 @@ export function useGameEngine() {
       if (address) {
         try {
           await ensureNetwork((window as any).ethereum);
-          const addr = CONTRACT_ADDRESS as `0x${string}`;
-          const args = [BigInt(index)] as const;
-          const fn = bed.nextAction === BedAction.Plant ? 'plant' : bed.nextAction === BedAction.Water ? 'water' : 'harvest';
-          await tx.run(
-            {
-              address: addr,
-              abi: FARM_ABI as any,
-              functionName: fn as any,
-              args: args as any,
-              simulate: { address: addr, abi: FARM_ABI as any, functionName: fn as any, args: args as any },
+          const actionFn =
+            bed.nextAction === BedAction.Plant
+              ? writePlant
+              : bed.nextAction === BedAction.Water
+                ? writeWater
+                : writeHarvest;
+          await actionFn(index, {
+            onStart: () => {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Отправка транзакции…' } }),
+                )
+              } catch {}
             },
-            {
-              onStart: () => {
-                try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Отправка транзакции…' } })) } catch {}
-              },
-              onMined: () => {
-                try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Транзакция подтверждена' } })) } catch {}
-              },
-            }
-          );
-          await refreshFromChain();
+            onMined: () => {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Транзакция подтверждена' } }),
+                )
+              } catch {}
+            },
+            onError: (msg) => {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent('wallet:message', { detail: { level: 'error', message: msg } }),
+                )
+              } catch {}
+            },
+          })
+          await refreshFromChain()
         } catch {
-          setModal({ open: true, message: 'Action failed. Please try again.' });
+          setModal({ open: true, message: 'Action failed. Please try again.' })
         }
       } else {
         // local fallback
@@ -191,7 +199,7 @@ export function useGameEngine() {
         });
       }
     },
-    [address, allowAction, refreshFromChain, setGameState, gameState.beds.length, tx]
+    [address, allowAction, refreshFromChain, setGameState, gameState.beds.length, writePlant, writeWater, writeHarvest]
   );
 
   const exchangeWheat = useCallback(async () => {
@@ -204,21 +212,29 @@ export function useGameEngine() {
         }
         await ensureNetwork((window as any).ethereum);
         const count = Math.floor(wheatCount / 10);
-        const addr = CONTRACT_ADDRESS as `0x${string}`;
-        const amount = BigInt(count * 10);
-        await tx.run(
-          {
-            address: addr,
-            abi: FARM_ABI as any,
-            functionName: 'exchangeWheat' as any,
-            args: [amount] as any,
-            simulate: { address: addr, abi: FARM_ABI as any, functionName: 'exchangeWheat' as any, args: [amount] as any },
+        await writeExchangeWheat(count * 10, {
+          onStart: () => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Отправка обмена…' } }),
+              )
+            } catch {}
           },
-          {
-            onStart: () => { try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Отправка обмена…' } })) } catch {} },
-            onMined: () => { try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Обмен подтвержден' } })) } catch {} },
-          }
-        );
+          onMined: () => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Обмен подтвержден' } }),
+              )
+            } catch {}
+          },
+          onError: (msg) => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('wallet:message', { detail: { level: 'error', message: msg } }),
+              )
+            } catch {}
+          },
+        })
         await refreshFromChain();
         setModal({ open: true, message: `You traded ${count * 10} wheat for ${count} coin(s)!` });
       } catch {
@@ -239,26 +255,35 @@ export function useGameEngine() {
       });
       setModal({ open: true, message: `You traded ${count * 10} wheat for ${count} coin(s)!` });
     }
-  }, [address, gameState.inventory.wheat, refreshFromChain, setGameState, tx]);
+  }, [address, gameState.inventory.wheat, refreshFromChain, setGameState, writeExchangeWheat]);
 
   const buyExpansion = useCallback(async () => {
     if (address) {
       try {
         await ensureNetwork((window as any).ethereum);
-        const addr = CONTRACT_ADDRESS as `0x${string}`;
-        await tx.run(
-          {
-            address: addr,
-            abi: FARM_ABI as any,
-            functionName: 'buyExpansion' as any,
-            args: [] as any,
-            simulate: { address: addr, abi: FARM_ABI as any, functionName: 'buyExpansion' as any, args: [] as any },
+        await writeBuyExpansion({
+          onStart: () => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Покупка расширения…' } }),
+              )
+            } catch {}
           },
-          {
-            onStart: () => { try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Покупка расширения…' } })) } catch {} },
-            onMined: () => { try { window.dispatchEvent(new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Расширение куплено' } })) } catch {} },
-          }
-        );
+          onMined: () => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('wallet:message', { detail: { level: 'info', message: 'Расширение куплено' } }),
+              )
+            } catch {}
+          },
+          onError: (msg) => {
+            try {
+              window.dispatchEvent(
+                new CustomEvent('wallet:message', { detail: { level: 'error', message: msg } }),
+              )
+            } catch {}
+          },
+        })
         await refreshFromChain();
         setModal({ open: true, message: 'Expansion purchased! New beds added.' });
       } catch {
@@ -280,7 +305,7 @@ export function useGameEngine() {
       });
       setModal({ open: true, message: 'Expansion purchased! New beds added.' });
     }
-  }, [address, gameState.inventory.coins, refreshFromChain, setGameState, tx]);
+  }, [address, gameState.inventory.coins, refreshFromChain, setGameState, writeBuyExpansion]);
 
   const toggleTheme = useCallback(() => {
     setIsDark((d) => !d);
