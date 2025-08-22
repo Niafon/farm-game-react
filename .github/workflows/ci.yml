@@ -129,6 +129,23 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Lint Solidity
+        run: |
+          mkdir -p reports
+          npm run lint:sol | tee reports/solhint.log
+      - name: Slither
+        run: |
+          mkdir -p reports
+          npm run slither || true
+      - name: Upload Solidity reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidity-reports
+          path: reports
+      - name: Check for critical vulnerabilities
+        run: |
+          jq -e '.results.detectors[] | select(.impact == "High")' reports/slither.json && exit 1 || exit 0
       - name: Test (Jest)
         run: npm run test
       - name: Validate env

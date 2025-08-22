@@ -17,6 +17,7 @@
     "test:contracts:gas": "cross-env REPORT_GAS=1 hardhat test",
     "coverage:sol": "hardhat coverage",
     "lint:sol": "solhint 'contracts/**/*.sol' || true",
+    "slither": "slither contracts/FarmGame.sol --json reports/slither.json",
     "analyze": "vite build --mode analyze && echo Open bundle-stats.html",
     "audit": "npm audit --omit=dev && npx depcheck",
     "hh:compile": "hardhat compile",
