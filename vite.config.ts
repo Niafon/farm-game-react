@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const plugins: PluginOption[] = [react()];
   if (mode === 'analyze') {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { visualizer } = require('rollup-plugin-visualizer') as { visualizer: (opts?: any) => PluginOption }
       plugins.push(visualizer({ filename: 'bundle-stats.html', gzipSize: true, brotliSize: true }) as PluginOption)
     } catch {
@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.NODE_ENV': JSON.stringify(mode),
       // Expose app version for Sentry release tagging and diagnostics
-      'import.meta.env.VITE_APP_VERSION': JSON.stringify(process.env.npm_package_version || '0.0.0'),
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(process.env.npm_package_version || '1.0.0'),
     },
     esbuild: { 
       drop: mode === 'production' ? ['console', 'debugger'] : [],
