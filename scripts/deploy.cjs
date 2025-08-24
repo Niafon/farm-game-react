@@ -1,14 +1,18 @@
-// Deployment script for FarmGame on Monad Testnet
+// Deployment script for FarmGame on Monad Testnet using ERC1967 proxy
 const { ethers } = require('hardhat');
 
 async function main() {
   const [deployer] = await ethers.getSigners();
   console.log('Deploying with:', deployer.address);
-  const Factory = await ethers.getContractFactory('FarmGame');
-  const contract = await Factory.deploy();
-  await contract.waitForDeployment();
-  const address = await contract.getAddress();
-  console.log('FarmGame deployed at:', address);
+  const ImplFactory = await ethers.getContractFactory('FarmGame');
+  const impl = await ImplFactory.deploy();
+  await impl.waitForDeployment();
+  const initData = ImplFactory.interface.encodeFunctionData('initialize');
+  const ProxyFactory = await ethers.getContractFactory('ERC1967Proxy');
+  const proxy = await ProxyFactory.deploy(await impl.getAddress(), initData);
+  await proxy.waitForDeployment();
+  const address = await proxy.getAddress();
+  console.log('FarmGame proxy deployed at:', address);
   if (process.env.VITE_CONTRACT_ADDRESS_PLACEHOLDER_FILE) {
     const fs = require('fs');
     try {
