@@ -1,6 +1,52 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 
+const MAX_UINT128 = (1n << 128n) - 1n;
+
+async function playerBaseSlot(address) {
+  return BigInt(ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(
+      ['address', 'uint256'],
+      [address, 0]
+    )
+  ));
+}
+
+async function setWheat(contract, address, amount) {
+  const base = await playerBaseSlot(address);
+  await ethers.provider.send('hardhat_setStorageAt', [
+    contract.target,
+    ethers.toBeHex(base, 32),
+    ethers.toBeHex(amount, 32),
+  ]);
+}
+
+async function setFertilizer(contract, address, value) {
+  const base = await playerBaseSlot(address);
+  const slot = base + 1n;
+  const encoded = value ? (1n << 16n) : 0n;
+  await ethers.provider.send('hardhat_setStorageAt', [
+    contract.target,
+    ethers.toBeHex(slot, 32),
+    ethers.toBeHex(encoded, 32),
+  ]);
+}
+
+async function setBedReady(contract, address, index) {
+  const base = await playerBaseSlot(address);
+  const bedsSlot = base + 2n;
+  const dataSlot = BigInt(
+    ethers.keccak256(
+      ethers.AbiCoder.defaultAbiCoder().encode(['uint256'], [bedsSlot])
+    )
+  ) + BigInt(index);
+  await ethers.provider.send('hardhat_setStorageAt', [
+    contract.target,
+    ethers.toBeHex(dataSlot, 32),
+    ethers.toBeHex(3n, 32),
+  ]);
+}
+
 describe('FarmGame', function () {
   let farm, owner, alice;
 
@@ -52,6 +98,34 @@ describe('FarmGame', function () {
     await (await farm.plant(0)).wait();
     const state = JSON.parse(await farm.getFullState(await owner.getAddress()));
     expect(state.beds[0].stage).to.equal('seed');
+  });
+
+  it('harvest reverts on wheat overflow', async () => {
+    await (await farm.plant(0)).wait();
+    const addr = await owner.getAddress();
+    await setWheat(farm, addr, MAX_UINT128);
+    await setBedReady(farm, addr, 0);
+    await expect(farm.harvest(0)).to.be.reverted;
+  });
+
+  it('batchHarvest reverts on wheat overflow', async () => {
+    await (await farm.plant(0)).wait();
+    const addr = await owner.getAddress();
+    await setWheat(farm, addr, MAX_UINT128 - 1n);
+    await setFertilizer(farm, addr, true);
+    await setBedReady(farm, addr, 0);
+    await expect(farm.batchHarvest([0])).to.be.reverted;
+  });
+
+  it('batchHarvest succeeds at uint128 max boundary', async () => {
+    await (await farm.plant(0)).wait();
+    const addr = await owner.getAddress();
+    await setWheat(farm, addr, MAX_UINT128 - 2n);
+    await setFertilizer(farm, addr, true);
+    await setBedReady(farm, addr, 0);
+    await (await farm.batchHarvest([0])).wait();
+    const state = JSON.parse(await farm.getFullState(addr));
+    expect(BigInt(state.inventory.wheat)).to.equal(MAX_UINT128);
   });
 });
 

@@ -140,7 +140,9 @@ contract FarmGame is OwnableLike, UUPSLike, PausableLike, ReentrancyGuardLike {
         b.stage = Stage.Empty;
         // increment wheat balance on-chain, bound to msg.sender
         uint128 yieldAmount = p.fertilizerPurchased ? 2 : 1;
-        unchecked { p.wheat += yieldAmount; }
+        uint128 newWheat = p.wheat + yieldAmount;
+        require(newWheat >= p.wheat);
+        p.wheat = newWheat;
         _emitDelta(msg.sender);
     }
 
@@ -233,7 +235,11 @@ contract FarmGame is OwnableLike, UUPSLike, PausableLike, ReentrancyGuardLike {
         }
         if (harvested > 0) {
             uint128 mult = p.fertilizerPurchased ? 2 : 1;
-            unchecked { p.wheat += uint128(harvested) * mult; }
+            require(harvested <= type(uint128).max / mult);
+            uint128 addAmount = uint128(harvested) * mult;
+            uint128 newWheat = p.wheat + addAmount;
+            require(newWheat >= p.wheat);
+            p.wheat = newWheat;
         }
         _emitDelta(msg.sender);
     }
