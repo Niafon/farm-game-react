@@ -14,7 +14,7 @@
     "test": "jest",
     "type-check": "tsc --noEmit",
     "test:coverage": "jest --coverage --watchAll=false",
-    "test:contracts:gas": "cross-env REPORT_GAS=1 hardhat test",
+    "test:contracts:gas": "REPORT_GAS=1 hardhat test",
     "coverage:sol": "hardhat coverage",
     "lint:sol": "solhint 'contracts/**/*.sol' || true",
     "slither": "slither contracts/FarmGame.sol --json reports/slither.json",
