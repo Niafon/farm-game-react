@@ -6,7 +6,7 @@ import {
   type SimulateContractParameters,
   type WriteContractParameters,
 } from '@wagmi/core'
-import type { Hex } from 'viem'
+import type { ContractFunctionName, Hex } from 'viem'
 import { wagmiConfig } from '../web3/wagmi'
 
 export type TxStatus = 'idle' | 'pending' | 'mining' | 'confirmed' | 'reverted'
@@ -29,20 +29,28 @@ export function useTxFlow() {
   }, [])
 
   const run = useCallback(
-    async <TAbi extends readonly unknown[], TFunctionName extends string>(
-      params: WriteContractParameters<TAbi, TFunctionName> & {
-        simulate?: SimulateContractParameters<TAbi, TFunctionName>
-      },
+    async <
+      TAbi extends readonly unknown[],
+      TFunctionName extends ContractFunctionName<TAbi, 'nonpayable' | 'payable'>,
+    >(
+      params: { simulate?: SimulateContractParameters<TAbi, TFunctionName> } &
+        WriteContractParameters<TAbi, TFunctionName>,
       opts?: TxFlowOpts,
     ) => {
       setError(null)
       setStatus('pending')
       opts?.onStart?.()
       try {
-        if (params.simulate) {
-          await simulateContract(wagmiConfig, params.simulate)
+        const { simulate, ...request } =
+          params as { simulate?: SimulateContractParameters<TAbi, TFunctionName> } &
+            WriteContractParameters<TAbi, TFunctionName>
+        if (simulate) {
+          await simulateContract(wagmiConfig, simulate as any)
         }
-        const txHash = await writeContract(wagmiConfig, params)
+        const txHash = await writeContract(
+          wagmiConfig,
+          request as WriteContractParameters<TAbi, TFunctionName>,
+        )
         setHash(txHash)
         setStatus('mining')
         const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: txHash })
