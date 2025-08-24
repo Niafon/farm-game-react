@@ -3,6 +3,8 @@ import { wagmiConfig } from '../web3/wagmi'
 import { ensureContractAddressConfigured } from '../config'
 import { FARM_ABI } from './abi'
 import { validateAddress, validateBedIndex, validateWheatAmount } from '../schemas/validation'
+import { useCallback, useMemo } from 'react'
+import { useTxFlow, type TxFlowOpts } from '../hooks/useTxFlow'
 // (reserved for future direct viem client usage if needed)
 
 // FARM_ABI is centralized in ./abi to avoid drift across modules
@@ -119,6 +121,240 @@ export async function writeBuyWell() {
 
 export async function writeBuyFertilizer() {
   return writeWithSimulation('buyFertilizer', [] as const)
+}
+
+export function useFarmContract() {
+  const tx = useTxFlow()
+  const address = ensureAddress()
+
+  const writeSetGameState = useCallback(
+    (stateJson: string, opts?: TxFlowOpts) =>
+      tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'setGameState',
+          args: [stateJson] as const,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'setGameState', args: [stateJson] as const },
+        },
+        opts,
+      ),
+    [tx, address],
+  )
+
+  const writePlant = useCallback(
+    (bedIndex: number, opts?: TxFlowOpts) => {
+      const validation = validateBedIndex(bedIndex)
+      if (!validation.success) {
+        throw new Error(`Invalid bed index: ${validation.error.message}`)
+      }
+      const args = [BigInt(bedIndex)] as const
+      return tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'plant',
+          args,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'plant', args },
+        },
+        opts,
+      )
+    },
+    [tx, address],
+  )
+
+  const writeWater = useCallback(
+    (bedIndex: number, opts?: TxFlowOpts) => {
+      const validation = validateBedIndex(bedIndex)
+      if (!validation.success) {
+        throw new Error(`Invalid bed index: ${validation.error.message}`)
+      }
+      const args = [BigInt(bedIndex)] as const
+      return tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'water',
+          args,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'water', args },
+        },
+        opts,
+      )
+    },
+    [tx, address],
+  )
+
+  const writeHarvest = useCallback(
+    (bedIndex: number, opts?: TxFlowOpts) => {
+      const validation = validateBedIndex(bedIndex)
+      if (!validation.success) {
+        throw new Error(`Invalid bed index: ${validation.error.message}`)
+      }
+      const args = [BigInt(bedIndex)] as const
+      return tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'harvest',
+          args,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'harvest', args },
+        },
+        opts,
+      )
+    },
+    [tx, address],
+  )
+
+  const writeBatchPlant = useCallback(
+    (indices: number[], opts?: TxFlowOpts) => {
+      const arr = indices.map((i) => BigInt(i))
+      const args = [arr] as const
+      return tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'batchPlant',
+          args,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'batchPlant', args },
+        },
+        opts,
+      )
+    },
+    [tx, address],
+  )
+
+  const writeBatchWater = useCallback(
+    (indices: number[], opts?: TxFlowOpts) => {
+      const arr = indices.map((i) => BigInt(i))
+      const args = [arr] as const
+      return tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'batchWater',
+          args,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'batchWater', args },
+        },
+        opts,
+      )
+    },
+    [tx, address],
+  )
+
+  const writeBatchHarvest = useCallback(
+    (indices: number[], opts?: TxFlowOpts) => {
+      const arr = indices.map((i) => BigInt(i))
+      const args = [arr] as const
+      return tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'batchHarvest',
+          args,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'batchHarvest', args },
+        },
+        opts,
+      )
+    },
+    [tx, address],
+  )
+
+  const writeExchangeWheat = useCallback(
+    (amountWheat: number, opts?: TxFlowOpts) => {
+      const validation = validateWheatAmount(amountWheat)
+      if (!validation.success) {
+        throw new Error(`Invalid wheat amount: ${validation.error.message}`)
+      }
+      const args = [BigInt(amountWheat)] as const
+      return tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'exchangeWheat',
+          args,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'exchangeWheat', args },
+        },
+        opts,
+      )
+    },
+    [tx, address],
+  )
+
+  const writeBuyExpansion = useCallback(
+    (opts?: TxFlowOpts) =>
+      tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'buyExpansion',
+          args: [] as const,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'buyExpansion', args: [] as const },
+        },
+        opts,
+      ),
+    [tx, address],
+  )
+
+  const writeBuyWell = useCallback(
+    (opts?: TxFlowOpts) =>
+      tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'buyWell',
+          args: [] as const,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'buyWell', args: [] as const },
+        },
+        opts,
+      ),
+    [tx, address],
+  )
+
+  const writeBuyFertilizer = useCallback(
+    (opts?: TxFlowOpts) =>
+      tx.run(
+        {
+          address,
+          abi: FARM_ABI as any,
+          functionName: 'buyFertilizer',
+          args: [] as const,
+          simulate: { address, abi: FARM_ABI as any, functionName: 'buyFertilizer', args: [] as const },
+        },
+        opts,
+      ),
+    [tx, address],
+  )
+
+  return useMemo(
+    () => ({
+      ...tx,
+      writeSetGameState,
+      writePlant,
+      writeWater,
+      writeHarvest,
+      writeBatchPlant,
+      writeBatchWater,
+      writeBatchHarvest,
+      writeExchangeWheat,
+      writeBuyExpansion,
+      writeBuyWell,
+      writeBuyFertilizer,
+    }),
+    [
+      tx,
+      writeSetGameState,
+      writePlant,
+      writeWater,
+      writeHarvest,
+      writeBatchPlant,
+      writeBatchWater,
+      writeBatchHarvest,
+      writeExchangeWheat,
+      writeBuyExpansion,
+      writeBuyWell,
+      writeBuyFertilizer,
+    ],
+  )
 }
 
 
