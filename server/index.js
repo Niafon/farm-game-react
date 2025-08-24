@@ -4,6 +4,26 @@ import cors from 'cors'
 import helmet from 'helmet'
 import crypto from 'node:crypto'
 import { verifyMessage } from 'viem'
+
+// Simple TOTP implementation without external deps
+function generateMfaSecret() {
+  return crypto.randomBytes(20).toString('hex')
+}
+
+function verifyTotp(secretHex, token) {
+  const key = Buffer.from(secretHex, 'hex')
+  const step = 30
+  const time = Math.floor(Date.now() / 1000 / step)
+  for (let w = -1; w <= 1; w++) {
+    const counter = Buffer.alloc(8)
+    counter.writeBigUInt64BE(BigInt(time + w))
+    const hmac = crypto.createHmac('sha1', key).update(counter).digest()
+    const offset = hmac[hmac.length - 1] & 0xf
+    const code = (hmac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000
+    if (code.toString().padStart(6, '0') === String(token)) return true
+  }
+  return false
+}
 // Optional: Redis for production nonce storage (lazy, only if REDIS_URL provided)
 let redis = null
 if (process.env.REDIS_URL) {
@@ -69,8 +89,9 @@ function getHost(req) {
   return (req.headers.host || '').split(':')[0]
 }
 
-// In-memory nonce store (fallback for local dev)
+// In-memory stores (fallback for local dev)
 const nonces = new Map()
+const mfaSecrets = new Map()
 
 async function saveNonce(nonce, ttlMs) {
   if (redis) {
@@ -97,6 +118,21 @@ async function checkAndUseNonce(nonce) {
   return true
 }
 
+async function saveMfaSecret(address, secret) {
+  if (redis) {
+    await redis.set(`siwe:mfa:${address}`, secret)
+    return
+  }
+  mfaSecrets.set(address, secret)
+}
+
+async function getMfaSecret(address) {
+  if (redis) {
+    return await redis.get(`siwe:mfa:${address}`)
+  }
+  return mfaSecrets.get(address)
+}
+
 app.get('/siwe/nonce', async (req, res) => {
   const ip = getClientIp(req)
   if (!rateLimit(`nonce:${ip}`, 60, 60_000)) return res.status(429).end()
@@ -104,6 +140,15 @@ app.get('/siwe/nonce', async (req, res) => {
   await saveNonce(nonce, 60_000)
   res.setHeader('Cache-Control', 'no-store')
   res.json({ nonce, expiresAt: new Date(Date.now() + 60_000).toISOString() })
+})
+
+// Generate and store TOTP secret for an address
+app.post('/mfa/setup', async (req, res) => {
+  const { address } = req.body || {}
+  if (typeof address !== 'string') return res.status(400).json({ ok: false })
+  const secret = generateMfaSecret()
+  await saveMfaSecret(address.toLowerCase(), secret)
+  res.json({ ok: true, secret })
 })
 
 app.post('/siwe/verify', async (req, res) => {
@@ -149,6 +194,15 @@ app.post('/siwe/verify', async (req, res) => {
 
     const ok = await verifyMessage({ address, message, signature })
     if (!ok) return res.status(401).json({ ok: false })
+
+    const mfaSecret = await getMfaSecret(address.toLowerCase())
+    if (mfaSecret) {
+      const { totp } = req.body || {}
+      if (typeof totp !== 'string' || !verifyTotp(mfaSecret, totp)) {
+        return res.status(401).json({ ok: false, mfaRequired: true })
+      }
+    }
+
     res.setHeader('Cache-Control', 'no-store')
     res.cookie('sid', crypto.randomUUID(), {
       httpOnly: true,

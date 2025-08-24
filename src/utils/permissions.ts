@@ -40,7 +40,11 @@ export function disableDeveloperMode(): void {
 // Check if user has admin privileges
 export function isAdmin(): boolean {
   // In production, this would check against a proper auth system
-  return isDeveloper() && localStorage.getItem('admin_role') === 'true'
+  return (
+    isDeveloper() &&
+    localStorage.getItem('admin_role') === 'true' &&
+    localStorage.getItem('mfa_verified') === 'true'
+  )
 }
 
 // Console command for enabling dev mode (only works in development)

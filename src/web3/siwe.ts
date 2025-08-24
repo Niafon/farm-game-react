@@ -45,13 +45,32 @@ export async function fetchServerNonce(): Promise<string | undefined> {
 
 export async function verifySiweOnServer(payload: { address: string; message: string; signature: string }): Promise<boolean> {
   try {
-    const resp = await fetch('/siwe/verify', {
+    let resp = await fetch('/siwe/verify', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'accept': 'application/json' },
       body: JSON.stringify(payload),
       credentials: 'include',
     })
-    return resp.ok
+    if (!resp.ok) {
+      try {
+        const data = await resp.json()
+        if (data?.mfaRequired) {
+          const totp = window.prompt('Enter MFA code')
+          if (!totp) return false
+          resp = await fetch('/siwe/verify', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'accept': 'application/json' },
+            body: JSON.stringify({ ...payload, totp }),
+            credentials: 'include',
+          })
+        }
+      } catch {}
+    }
+    if (resp.ok) {
+      try { localStorage.setItem('mfa_verified', 'true') } catch {}
+      return true
+    }
+    return false
   } catch {
     return false
   }
@@ -72,6 +91,7 @@ export async function serverLogout(): Promise<void> {
   try {
     await fetch('/siwe/logout', { method: 'POST', credentials: 'include' })
   } catch {}
+  try { localStorage.removeItem('mfa_verified') } catch {}
 }
 
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useRpcHealth } from '../services/monitoring'
-import { isDeveloper } from '../utils/permissions'
+import { isAdmin } from '../utils/permissions'
 
 interface MonitoringDashboardProps {
   isVisible?: boolean
@@ -42,8 +42,8 @@ export function MonitoringDashboard({ isVisible = false, onToggle }: MonitoringD
     return () => window.removeEventListener('wallet:stats' as any, updateStats)
   }, [])
 
-  // Only show monitoring for developers and admins
-  if (!isDeveloper()) {
+  // Only show monitoring for admins
+  if (!isAdmin()) {
     return null // Hide completely from regular users
   }
 
@@ -197,7 +197,7 @@ export function useMonitoringDashboard() {
 
   // Show dashboard on key combination (Ctrl+Shift+D for Developer)
   useEffect(() => {
-    if (!isDeveloper()) return
+    if (!isAdmin()) return
 
     const handleKeyPress = (e: KeyboardEvent) => {
       // Changed to Ctrl+Shift+D (Developer) - less obvious for users
@@ -213,7 +213,7 @@ export function useMonitoringDashboard() {
   // Auto-show on critical issues (only for developers)
   const health = useRpcHealth()
   useEffect(() => {
-    if (!isDeveloper()) return
+    if (!isAdmin()) return
     
     if (!health.overallHealth && health.endpoints.some(e => !e.isHealthy)) {
       setIsVisible(true)
