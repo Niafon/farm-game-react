@@ -8,12 +8,10 @@ export function getEnvVar(key: string): string | undefined {
 
   // Vite/browser: use import.meta.env when available without referencing undeclared globals
   try {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore - import.meta is provided by Vite at runtime
-    if (typeof import.meta !== 'undefined' && (import.meta as any).env) {
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      return ((import.meta as any).env as Record<string, string | undefined>)[key]
+    // Access import.meta via eval so Jest can parse this file in CommonJS mode
+    const meta = (0, eval)('import.meta') as any
+    if (meta?.env) {
+      return (meta.env as Record<string, string | undefined>)[key]
     }
   } catch {
     // Swallow in non-Vite contexts (e.g., Jest)
