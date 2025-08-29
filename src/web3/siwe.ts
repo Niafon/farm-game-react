@@ -59,7 +59,7 @@ export async function verifySiweOnServer(payload: { address: string; message: st
 
 export async function fetchMe(): Promise<{ ok: boolean; address?: string } | null> {
   try {
-    const resp = await fetch('/me', { method: 'GET', headers: { 'accept': 'application/json' }, credentials: 'include' })
+    const resp = await fetch('/siwe/me', { method: 'GET', headers: { 'accept': 'application/json' }, credentials: 'include' })
     if (!resp.ok) return { ok: false }
     const json = (await resp.json()) as { ok: boolean; address?: string }
     return json
